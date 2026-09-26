@@ -48,6 +48,15 @@ USE_CASE_IMPLEMENTATIONS = """
 output_file_lock = threading.Lock()
 
 
+# There are three variants of ideas that we can generate:
+# - `code_demo` (default): self-contained code blocks that would demonstrate the described feature
+# - `use_case`: practical problems that would benefit from the use of the feature under consideration that state
+#   that the solution should use this feature
+# - `hard_use_case`: practical problems that would benefit from the use of the feature under consideration
+#   that explicitly avoid mentioning the feature that the idea explores
+IdeaVariant = Literal["code_demo", "use_case", "hard_use_case"]
+
+
 @dataclass
 class Idea:
     """A single Python example idea proposed for a documentation change."""
@@ -55,18 +64,13 @@ class Idea:
     doc_path: Path
     description: str
     python_version: str
+    variant: IdeaVariant
 
 
 def pep_identifier(doc_path: Path) -> str | None:
     """Return a normalized PEP identifier when doc_path names a PEP document."""
     match = re.search(r"\bpep[-_ ]?(\d+)\b", doc_path.stem, re.IGNORECASE)
     return f"PEP {int(match.group(1))}" if match else None
-
-
-# There are two variants of ideas that we can generate:
-# - `code_demo` (default): self-contained code blocks that would demonstrate the described feature
-# - `use_case`: practical problems that would benefit from the use of the feature under consideration
-IdeaVariant = Literal["code_demo", "use_case", "hard_use_case"]
 
 
 def generate_ideas(model: Model, doc_path: Path, python_version: str, variant: IdeaVariant = "code_demo") -> list[Idea]:
@@ -137,7 +141,7 @@ C API changes, shell commands and CLI invocations, or build configuration.
     context.add(doc_path.name, doc_path)
     context.set_json_schema(schema)
     response = model.generate(prompt, context, thinking=True)
-    return [Idea(doc_path, description, python_version) for description in response["ideas"]]
+    return [Idea(doc_path, description, python_version, variant=variant) for description in response["ideas"]]
 
 
 def prepare_output_file(output_path: Path) -> None:

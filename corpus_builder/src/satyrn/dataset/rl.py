@@ -5,7 +5,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 import click
 from tqdm import tqdm
@@ -50,6 +50,9 @@ class TestCase:
             expected_output=value["expected_output"],
             test_code=value["test_code"],
         )
+
+
+ProblemVariant = Literal[""]
 
 
 @dataclass(frozen=True)
