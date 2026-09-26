@@ -12,7 +12,7 @@ import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Iterator
 
 import click
 
@@ -158,3 +158,8 @@ def append_dataset_line(dataset_line: dict, output_path: Path) -> None:
     """Append dataset_line to output_path as one JSON line."""
     with output_file_lock, output_path.open("a") as output_file:
         output_file.write(json.dumps(dataset_line) + "\n")
+
+
+def read_jsonl_file(input_path: Path) -> Iterator[dict]:
+    for line in input_path.open("r"):
+        yield json.loads(line)
