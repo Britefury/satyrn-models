@@ -45,7 +45,7 @@ PASS_MARKER = "__SATYRN_TEST_PASSED__"
 @click.option(
     "--idea-variant",
     "idea_variant",
-    type=click.Choice(["code_demo", "use_case"]),
+    type=click.Choice(["code_demo", "use_case", "hard_use_case"]),
     required=True,
     help="Which type of idea; code_demo|use_case",
 )
