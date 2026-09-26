@@ -12,7 +12,6 @@ from tqdm import tqdm
 
 from satyrn.dataset.llm.context import Context
 from satyrn.dataset.llm.models import Model, get_llm
-from satyrn.dataset.utils.concurrency import split_workers
 from satyrn.dataset.utils.generation import (
     PYTHON_CODE_RULES,
     SYSTEM_PROMPT,
