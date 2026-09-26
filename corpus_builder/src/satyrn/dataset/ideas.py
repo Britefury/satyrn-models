@@ -2,6 +2,7 @@
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import asdict
 from pathlib import Path
 
 import click
@@ -70,7 +71,7 @@ def main(
         ideas = generate_ideas(model, doc_path, python_version, variant=idea_variant)
         logger.info(f"Generated {len(ideas)} ideas for {doc_path.name}")
         for idea in ideas:
-            idea_dict = idea.asdict()
+            idea_dict = asdict(idea)
             idea_dict["doc_path"] = str(doc_path.relative_to(input_path))
             append_dataset_line(idea_dict, output_path)
         if preview:
