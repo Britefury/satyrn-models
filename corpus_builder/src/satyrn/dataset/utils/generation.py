@@ -12,6 +12,7 @@ import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import click
 
@@ -25,6 +26,21 @@ PYTHON_CODE_RULES = """
 - Use Python API calls (e.g. call a module's functions directly instead of `python -m module ...`).
 - The code must run non-interactively to completion without requiring a real terminal.
 - The code must terminate within a few seconds; no infinite loops or blocking waits.
+- Only write Python code. Skip anything that cannot be expressed as a Python code example,
+  such as C API changes, shell commands and CLI invocations, build configuration, etc.
+"""
+
+USE_CASE_RULES = """
+- The idea must exercise Python and should not require shell command or CLI invocation.
+- The use case should run non-interactively to completion without requiring a real terminal.
+- The problem should be solvable with code that terminates within a few seconds; no infinite loops or blocking waits.
+- Only propose problems that can be solved with Pure Python. Skip anything that cannot be solved with a Python code
+  example, such as requiring C API changes, requiring shell commands or CLI invocations, build configuration, etc.
+"""
+
+USE_CASE_IMPLEMENTATIONS = """
+- Use Python API calls (e.g. call a module's functions directly instead of `python -m module ...`).
+- The code must run non-interactively to completion without requiring a real terminal.
 - Only write Python code. Skip anything that cannot be expressed as a Python code example,
   such as C API changes, shell commands and CLI invocations, build configuration, etc.
 """
@@ -47,9 +63,16 @@ def pep_identifier(doc_path: Path) -> str | None:
     return f"PEP {int(match.group(1))}" if match else None
 
 
-def generate_ideas(model: Model, doc_path: Path, python_version: str) -> list[Idea]:
+# There are two variants of ideas that we can generate:
+# - `code_demo` (default): self-contained code blocks that would demonstrate the described feature
+# - `use_case`: practical problems that would benefit from the use of the feature under consideration
+IdeaVariant = Literal['code_demo', 'use_case']
+
+
+def generate_ideas(model: Model, doc_path: Path, python_version: str, variant: IdeaVariant = 'code_demo') -> list[Idea]:
     """Return distinct Python example ideas for features described in doc_path."""
-    prompt = f"""
+    if variant == 'code_demo':
+        prompt = f"""
 The attached document describes a change in Python version {python_version}. Describe between 0 and 50
 ideas for short, self-contained code blocks that would demonstrate the described features.
 
@@ -57,10 +80,25 @@ ideas for short, self-contained code blocks that would demonstrate the described
 - Propose fewer ideas if the document only covers a small change.
 - Do not repeat the same idea.
 - DO NOT propose ideas for parts of the document that cannot be demonstrated in Python, such as
-  C API changes, shell commands and CLI invocations, or build configuration.
+C API changes, shell commands and CLI invocations, or build configuration.
 
 {PYTHON_CODE_RULES}
-    """
+"""
+    elif variant == 'use_case':
+        prompt = f"""
+The attached document describes a change in Python version {python_version}. Describe between 0 and 50
+ideas for short practical Python programming problems that could benefit from the use of the described features.
+
+- Each idea is a short description of a practical situation that can be solved with pure Python where the use
+  of the described feature improves the code by simplifying it, making it more secure, making it more elegant
+  or a combination of the aforementioned.
+- Propose fewer ideas if the document only covers a small change.
+- Do not repeat the same idea.
+- DO NOT propose ideas for parts of the document that cannot be demonstrated in Python, such as
+C API changes, shell commands and CLI invocations, or build configuration.
+
+{PYTHON_CODE_RULES}
+"""
     schema = {
         "type": "object",
         "properties": {
