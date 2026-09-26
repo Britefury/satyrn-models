@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
+class SchemaValidationError(Exception):
+    pass
+
+
 class Model(ABC):
     """LLM backend base class."""
 
@@ -69,7 +73,9 @@ class DeepSeekModel(Model):
                     {"role": "user", "content": f"That did not match the required schema: {error}. Try again."}
                 )
 
-        raise ValueError(f"DeepSeek did not return a schema-conforming response after {max_attempts} attempts")
+        raise SchemaValidationError(
+            f"DeepSeek did not return a schema-conforming response after {max_attempts} attempts"
+        )
 
 
 def get_llm(provider: str, model_name: str) -> Model:
