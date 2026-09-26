@@ -9,7 +9,6 @@ import click
 from tqdm import tqdm
 
 from satyrn.dataset.llm.models import get_llm, SchemaValidationError
-from satyrn.dataset.utils.concurrency import split_workers
 from satyrn.dataset.utils.preview import print_ideas
 from satyrn.dataset.utils.generation import (
     IdeaVariant,
@@ -61,7 +60,6 @@ def main(
 ) -> None:
     """Generate a testable evaluation and Reinforcement Learning dataset."""
     model = get_llm("deepseek", "deepseek-v4-flash")
-    file_workers, _ = split_workers(workers)
 
     prepare_output_file(output_path)
     input_docs = collect_input_docs(input_path)
@@ -82,7 +80,7 @@ def main(
             if preview:
                 print_ideas(ideas)
 
-    with ThreadPoolExecutor(max_workers=file_workers) as executor:
+    with ThreadPoolExecutor(max_workers=workers) as executor:
         futures = [executor.submit(process_doc, doc_path) for doc_path in input_docs]
         for future in tqdm(as_completed(futures), total=len(input_docs), desc="Doc files"):
             future.result()
