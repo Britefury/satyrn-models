@@ -2,7 +2,6 @@
 
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import click
@@ -11,6 +10,7 @@ from tqdm import tqdm
 from satyrn.dataset.llm.models import get_llm
 from satyrn.dataset.utils.concurrency import split_workers
 from satyrn.dataset.utils.generation import (
+    IdeaVariant,
     append_dataset_line,
     collect_input_docs,
     generate_ideas,
@@ -40,8 +40,15 @@ PASS_MARKER = "__SATYRN_TEST_PASSED__"
     help="JSONL file to write the generated dataset to.",
 )
 @click.option("--python-version", required=True, help='Python version the dataset addresses, e.g. "3.15".')
+@click.option(
+    "--idea-variant",
+    "idea_variant",
+    type=click.Choice(['code_demo', 'use_case']),
+    required=True,
+    help='Which type of idea; code_demo|use_case'
+)
 @click.option("--workers", type=click.IntRange(min=1), default=1, help="Number of lines to generate in parallel.")
-def main(input_path: Path, output_path: Path, python_version: str, workers: int) -> None:
+def main(input_path: Path, output_path: Path, python_version: str, idea_variant: IdeaVariant, workers: int) -> None:
     """Generate a testable evaluation and Reinforcement Learning dataset."""
     model = get_llm("deepseek", "deepseek-v4-flash")
     file_workers, _ = split_workers(workers)
@@ -51,7 +58,7 @@ def main(input_path: Path, output_path: Path, python_version: str, workers: int)
 
     def process_doc(doc_path: Path) -> None:
         """Generate and write every testable task for one source document."""
-        ideas = generate_ideas(model, doc_path, python_version)
+        ideas = generate_ideas(model, doc_path, python_version, idea_variant=idea_variant)
         for idea in ideas:
             idea_dict = idea.asdict()
             idea_dict['doc_path'] = str(doc_path.relative_to(input_path))
