@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 from rich.logging import RichHandler
 
-from satyrn.dataset import cpt, rl, sft
+from satyrn.dataset import cpt, rl, sft, ideas
 from satyrn.dataset.inputs import collect_doc_changes, download_inputs
 
 handler = RichHandler(show_time=False, show_path=False)
@@ -33,5 +33,6 @@ def cli(ctx: click.Context) -> None:
 cli.add_command(cpt.main)
 cli.add_command(sft.main)
 cli.add_command(rl.main)
+cli.add_command(ideas.main)
 cli.add_command(download_inputs.main)
 cli.add_command(collect_doc_changes.main)
