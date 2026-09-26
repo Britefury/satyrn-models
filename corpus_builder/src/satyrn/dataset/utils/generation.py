@@ -85,6 +85,7 @@ C API changes, shell commands and CLI invocations, or build configuration.
 {PYTHON_CODE_RULES}
 """
     elif variant == "use_case":
+        # Perhaps we should use the phrase 'making it more robust' rather than 'making it more secure'?
         prompt = f"""
 The attached document describes a change in Python version {python_version}. Describe between 0 and 50
 ideas for short practical Python programming problems that could benefit from the use of the described features.
@@ -101,6 +102,7 @@ C API changes, shell commands and CLI invocations, or build configuration.
 {USE_CASE_RULES}
 """
     elif variant == "hard_use_case":
+        # Perhaps we should use the phrase 'making it more robust' rather than 'making it more secure'?
         prompt = f"""
 The attached document describes a change in Python version {python_version}. Describe between 0 and 50
 ideas for short practical Python programming problems that could benefit from the use of the described features.
