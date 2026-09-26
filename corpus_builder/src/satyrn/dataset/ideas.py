@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 PASS_MARKER = "__SATYRN_TEST_PASSED__"
 
 
-@click.command("rl")
+@click.command("ideas")
 @click.option(
     "-i",
     "--input",
