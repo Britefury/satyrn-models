@@ -48,9 +48,8 @@ PASS_MARKER = "__SATYRN_TEST_PASSED__"
     help="Which type of idea; code_demo|use_case",
 )
 @click.option("--workers", type=click.IntRange(min=1), default=1, help="Number of lines to generate in parallel.")
-@click.option("--limit", type=click.IntRange(min=0), default=0, help="Number of documents to process, 0 for all")
 def main(
-    input_path: Path, output_path: Path, python_version: str, idea_variant: IdeaVariant, workers: int, limit: int
+    input_path: Path, output_path: Path, python_version: str, idea_variant: IdeaVariant, workers: int,
 ) -> None:
     """Generate a testable evaluation and Reinforcement Learning dataset."""
     model = get_llm("deepseek", "deepseek-v4-flash")
@@ -58,7 +57,6 @@ def main(
 
     prepare_output_file(output_path)
     input_docs = collect_input_docs(input_path)
-    limited_input_docs = input_docs[:limit] if limit > 0 else input_docs
 
     def process_doc(doc_path: Path) -> None:
         """Generate and write every testable task for one source document."""
@@ -69,6 +67,6 @@ def main(
             append_dataset_line(idea_dict, output_path)
 
     with ThreadPoolExecutor(max_workers=file_workers) as executor:
-        futures = [executor.submit(process_doc, doc_path) for doc_path in limited_input_docs]
-        for future in tqdm(as_completed(futures), total=len(limited_input_docs), desc="Doc files"):
+        futures = [executor.submit(process_doc, doc_path) for doc_path in input_docs]
+        for future in tqdm(as_completed(futures), total=len(input_docs), desc="Doc files"):
             future.result()
