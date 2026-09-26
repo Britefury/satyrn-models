@@ -67,7 +67,7 @@ def main(
 
     def process_doc(doc_path: Path) -> None:
         """Generate and write every testable task for one source document."""
-        ideas = generate_ideas(model, doc_path, python_version, idea_variant=idea_variant)
+        ideas = generate_ideas(model, doc_path, python_version, variant=idea_variant)
         logger.info(f"Generated {len(ideas)} ideas for {doc_path.name}")
         for idea in ideas:
             idea_dict = idea.asdict()
