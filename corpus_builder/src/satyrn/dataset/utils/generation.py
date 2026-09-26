@@ -66,12 +66,12 @@ def pep_identifier(doc_path: Path) -> str | None:
 # There are two variants of ideas that we can generate:
 # - `code_demo` (default): self-contained code blocks that would demonstrate the described feature
 # - `use_case`: practical problems that would benefit from the use of the feature under consideration
-IdeaVariant = Literal['code_demo', 'use_case']
+IdeaVariant = Literal["code_demo", "use_case"]
 
 
-def generate_ideas(model: Model, doc_path: Path, python_version: str, variant: IdeaVariant = 'code_demo') -> list[Idea]:
+def generate_ideas(model: Model, doc_path: Path, python_version: str, variant: IdeaVariant = "code_demo") -> list[Idea]:
     """Return distinct Python example ideas for features described in doc_path."""
-    if variant == 'code_demo':
+    if variant == "code_demo":
         prompt = f"""
 The attached document describes a change in Python version {python_version}. Describe between 0 and 50
 ideas for short, self-contained code blocks that would demonstrate the described features.
@@ -84,7 +84,7 @@ C API changes, shell commands and CLI invocations, or build configuration.
 
 {PYTHON_CODE_RULES}
 """
-    elif variant == 'use_case':
+    elif variant == "use_case":
         prompt = f"""
 The attached document describes a change in Python version {python_version}. Describe between 0 and 50
 ideas for short practical Python programming problems that could benefit from the use of the described features.
