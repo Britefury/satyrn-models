@@ -9,6 +9,7 @@ from tqdm import tqdm
 
 from satyrn.dataset.llm.models import get_llm
 from satyrn.dataset.utils.concurrency import split_workers
+from satyrn.dataset.utils.preview import print_ideas
 from satyrn.dataset.utils.generation import (
     IdeaVariant,
     append_dataset_line,
@@ -47,9 +48,15 @@ PASS_MARKER = "__SATYRN_TEST_PASSED__"
     required=True,
     help="Which type of idea; code_demo|use_case",
 )
+@click.option("--preview", is_flag=True, default=False, help="Print each idea after it is saved.")
 @click.option("--workers", type=click.IntRange(min=1), default=1, help="Number of lines to generate in parallel.")
 def main(
-    input_path: Path, output_path: Path, python_version: str, idea_variant: IdeaVariant, workers: int,
+    input_path: Path,
+    output_path: Path,
+    python_version: str,
+    idea_variant: IdeaVariant,
+    preview: bool,
+    workers: int,
 ) -> None:
     """Generate a testable evaluation and Reinforcement Learning dataset."""
     model = get_llm("deepseek", "deepseek-v4-flash")
@@ -61,10 +68,13 @@ def main(
     def process_doc(doc_path: Path) -> None:
         """Generate and write every testable task for one source document."""
         ideas = generate_ideas(model, doc_path, python_version, idea_variant=idea_variant)
+        logger.info(f"Generated {len(ideas)} ideas for {doc_path.name}")
         for idea in ideas:
             idea_dict = idea.asdict()
             idea_dict["doc_path"] = str(doc_path.relative_to(input_path))
             append_dataset_line(idea_dict, output_path)
+        if preview:
+            print_ideas(ideas)
 
     with ThreadPoolExecutor(max_workers=file_workers) as executor:
         futures = [executor.submit(process_doc, doc_path) for doc_path in input_docs]
