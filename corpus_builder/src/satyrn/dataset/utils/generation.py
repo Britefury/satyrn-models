@@ -94,6 +94,7 @@ ideas for short practical Python programming problems that could benefit from th
   or a combination of the aforementioned.
 - Propose fewer ideas if the document only covers a small change.
 - Do not repeat the same idea.
+- Propose fewer ideas when the ideas start becoming too similar to previous ideas.
 - DO NOT propose ideas for parts of the document that cannot be demonstrated in Python, such as
 C API changes, shell commands and CLI invocations, or build configuration.
 
