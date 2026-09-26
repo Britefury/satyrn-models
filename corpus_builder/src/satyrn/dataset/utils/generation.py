@@ -97,7 +97,7 @@ ideas for short practical Python programming problems that could benefit from th
 - DO NOT propose ideas for parts of the document that cannot be demonstrated in Python, such as
 C API changes, shell commands and CLI invocations, or build configuration.
 
-{PYTHON_CODE_RULES}
+{USE_CASE_RULES}
 """
     schema = {
         "type": "object",
