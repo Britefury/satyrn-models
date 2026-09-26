@@ -44,9 +44,9 @@ PASS_MARKER = "__SATYRN_TEST_PASSED__"
 @click.option(
     "--idea-variant",
     "idea_variant",
-    type=click.Choice(["code_demo", "use_case", "hard_use_case"]),
+    type=click.Choice(list(IdeaVariant.__args__)),
     required=True,
-    help="Which type of idea; code_demo|use_case",
+    help="Which type of idea; {}".format("|".join(IdeaVariant.__args__)),
 )
 @click.option("--preview", is_flag=True, default=False, help="Print each idea after it is saved.")
 @click.option("--workers", type=click.IntRange(min=1), default=1, help="Number of lines to generate in parallel.")
