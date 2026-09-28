@@ -75,10 +75,7 @@ def main(
             logger.info(f"Generated {len(ideas)} ideas for {doc_path.name}")
             for idea in ideas:
                 idea_dict = asdict(idea)
-                if input_path.is_dir():
-                    idea_dict["doc_path"] = str(doc_path.relative_to(input_path))
-                else:
-                    idea_dict["doc_path"] = input_path.name
+                idea_dict["doc_path"] = str(doc_path.absolute())
                 append_dataset_line(idea_dict, output_path)
             if preview:
                 print_ideas(ideas)
