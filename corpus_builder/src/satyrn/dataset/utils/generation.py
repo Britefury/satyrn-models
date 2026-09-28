@@ -54,7 +54,7 @@ output_file_lock = threading.Lock()
 #   that the solution should use this feature
 # - `hard_use_case`: practical problems that would benefit from the use of the feature under consideration
 #   that explicitly avoid mentioning the feature that the idea explores
-IdeaVariant = Literal["code_demo", "use_case", "hard_use_case"]
+IdeaVariant = Literal["code_demo", "use_case"]
 
 
 @dataclass
@@ -95,27 +95,8 @@ The attached document describes a change in Python version {python_version}. Des
 ideas for short practical Python programming problems that could benefit from the use of the described features.
 
 - Each idea is a short description of a practical situation that can be solved with pure Python where the use
-  of the described feature improves the code by simplifying it, making it more secure, making it more elegant
-  or a combination of the aforementioned.
-- Propose fewer ideas if the document only covers a small change.
-- Do not repeat the same idea.
-- Propose fewer ideas when the ideas start becoming too similar to previous ideas.
-- DO NOT propose ideas for parts of the document that cannot be demonstrated in Python, such as
-C API changes, shell commands and CLI invocations, or build configuration.
-
-{USE_CASE_RULES}
-"""
-    elif variant == "hard_use_case":
-        # Perhaps we should use the phrase 'making it more robust' rather than 'making it more secure'?
-        prompt = f"""
-The attached document describes a change in Python version {python_version}. Describe between 0 and 50
-ideas for short practical Python programming problems that could benefit from the use of the described features.
-
-- Each idea is a short description of a practical situation that can be solved with pure Python where the use
-  of the described feature improves the code by simplifying it, making it more secure, making it more elegant
-  or a combination of the aforementioned.
-- Do not mention the described feature by name; the practical situation should be designed such that an
-  experienced Python programmer who is familiar with the feature would use it to solve the proposed problem.
+  of the described feature improves the code by simplifying it, making it more robust, making it more secure,
+  making it more elegant or a combination of the aforementioned.
 - Propose fewer ideas if the document only covers a small change.
 - Do not repeat the same idea.
 - Propose fewer ideas when the ideas start becoming too similar to previous ideas.
