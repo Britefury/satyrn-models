@@ -12,7 +12,7 @@ import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Iterator
+from typing import Any, Literal, Iterator
 
 import click
 
@@ -145,6 +145,16 @@ def append_dataset_line(dataset_line: dict, output_path: Path) -> None:
         output_file.write(json.dumps(dataset_line) + "\n")
 
 
-def read_jsonl_file(input_path: Path) -> Iterator[dict]:
+def read_jsonl_file(input_path: Path) -> Iterator[dict[str, Any]]:
     for line in input_path.open("r"):
         yield json.loads(line)
+
+
+def load_ideas(input_path: Path) -> list[Idea]:
+    d: dict[str, str | Path | IdeaVariant]
+    ideas: list[Idea] = []
+    for d in read_jsonl_file(input_path):
+        # We have to convert the document path from a str to a Path
+        d["doc_path"] = Path(d["doc_path"])
+        ideas.append(Idea(**d))
+    return ideas
