@@ -21,7 +21,7 @@ from satyrn.dataset.utils.generation import (
     output_file_lock,
     pep_identifier,
     prepare_output_file,
-    read_jsonl_file,
+    load_ideas,
 )
 from satyrn.dataset.utils.preview import print_dataset_line, print_ideas
 from satyrn.dataset.utils.sandbox import Sandbox, get_predecessor_python_version, remove_leftover_containers
@@ -465,7 +465,7 @@ def main(
     predecessor_sandbox = Sandbox(get_predecessor_python_version(python_version))
 
     prepare_output_file(output_path)
-    ideas = [Idea(**d) for d in read_jsonl_file(ideas_path)]
+    ideas = load_ideas(ideas_path)
     logger.info("Loaded %d ideas", len(ideas))
 
     try:
