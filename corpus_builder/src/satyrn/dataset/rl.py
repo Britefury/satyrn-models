@@ -204,13 +204,8 @@ def _validate_problem_structure(problem: Problem) -> None:
             raise ValueError(f"Test {test_case.name!r} does not call the entry point")
 
 
-def judge_problem(model: Model, idea: Idea, problem: Problem, variant: ProblemVariant) -> dict:
+def judge_problem(model: Model, idea: Idea, problem: Problem) -> dict:
     """Return an LLM verdict on the task's fidelity, coverage, and test quality."""
-    if not is_problem_variant_compatible_with_idea(variant, idea.variant):
-        raise ProblemVariantIncompatibleWithIdea(
-            f"Problem variant {variant} is not compatible with idea variant {idea.variant}"
-        )
-
     prompt = f"""
 The attached document describes a change in Python version {idea.python_version}. Review this
 generated programming task and its already-executed reference solution:
