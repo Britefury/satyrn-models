@@ -1,6 +1,7 @@
 """Generate testable Python evaluation and Reinforcement Learning datasets."""
 
 import logging
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from pathlib import Path
@@ -59,7 +60,7 @@ def main(
     workers: int,
 ) -> None:
     """Generate a testable evaluation and Reinforcement Learning dataset."""
-    model = get_llm("deepseek", "deepseek-v4-flash")
+    model = get_llm("deepseek", os.environ.get("LLM_MODEL_NAME", "deepseek-v4-flash"))
 
     prepare_output_file(output_path)
     input_docs = collect_input_docs(input_path)
