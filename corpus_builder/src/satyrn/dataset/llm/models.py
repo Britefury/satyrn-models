@@ -41,7 +41,10 @@ class DeepSeekModel(Model):
 
     def __init__(self, model_name: str) -> None:
         self.model_name = model_name
-        self.client = OpenAI(api_key=os.environ["DEEPSEEK_API_KEY"], base_url="https://api.deepseek.com")
+        self.client = OpenAI(
+            api_key=os.environ["DEEPSEEK_API_KEY"],
+            base_url=os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com"),
+        )
 
     def generate(self, prompt: str, context: Context, thinking: bool = False, effort: str = "medium") -> str | dict:
         messages = [
