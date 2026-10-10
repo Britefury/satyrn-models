@@ -272,6 +272,8 @@ understanding of the new Python API rather than algorithmic difficulty.
   specify its return value.
 - Describe how the new Python API or feature helps with solving the problem at hand.
 - Include the solution in the prompt so that the learner can learn by rote learning.
+- Ensure that any code blocks in the prompt are contained within triple backticks with the language
+  identified, and code snippets within backticks.
 - In `entry_point`, give only the callable's name.
 - In `solution`, provide a complete reference implementation defining that callable.
 - Provide between {MIN_TEST_CASES} and {MAX_TEST_CASES} independent test cases covering ordinary
@@ -303,6 +305,8 @@ understanding of the new Python API rather than algorithmic difficulty.
 - Describe how the new Python API or feature helps with solving the problem at hand.
 - Include an example in the prompt that is *not* the solution that the learner can adapt to implement
   their solution.
+- Ensure that any code blocks in the prompt are contained within triple backticks with the language
+  identified, and code snippets within backticks.
 - In `entry_point`, give only the callable's name.
 - In `solution`, provide a complete reference implementation defining that callable.
 - Provide between {MIN_TEST_CASES} and {MAX_TEST_CASES} independent test cases covering ordinary
@@ -331,6 +335,8 @@ understanding of the new Python API rather than algorithmic difficulty.
 
 - In `prompt`, describe the problem, include the exact signature of one callable entry point, and
   specify its return value. Do not reveal the solution.
+- Ensure that any code blocks in the prompt are contained within triple backticks with the language
+  identified, and code snippets within backticks.
 - In `entry_point`, give only the callable's name.
 - In `solution`, provide a complete reference implementation defining that callable.
 - Provide between {MIN_TEST_CASES} and {MAX_TEST_CASES} independent test cases covering ordinary
@@ -361,6 +367,8 @@ understanding of the new Python API rather than algorithmic difficulty.
   specify its return value. Do not reveal the solution.
 - Do not mention the new Python API or feature by name; the learner should choose to use it to solve
   the problem at hand.
+- Ensure that any code blocks in the prompt are contained within triple backticks with the language
+  identified, and code snippets within backticks.
 - In `entry_point`, give only the callable's name.
 - In `solution`, provide a complete reference implementation defining that callable.
 - Provide between {MIN_TEST_CASES} and {MAX_TEST_CASES} independent test cases covering ordinary
