@@ -8,8 +8,7 @@ from pathlib import Path
 import click
 from tqdm import tqdm
 
-from satyrn.dataset.llm.models import get_llm, SchemaValidationError
-from satyrn.dataset.utils.preview import print_ideas
+from satyrn.dataset.llm.models import SchemaValidationError, get_llm
 from satyrn.dataset.utils.generation import (
     IdeaVariant,
     append_dataset_line,
@@ -17,6 +16,7 @@ from satyrn.dataset.utils.generation import (
     generate_ideas,
     prepare_output_file,
 )
+from satyrn.dataset.utils.preview import print_ideas
 
 logger = logging.getLogger(__name__)
 

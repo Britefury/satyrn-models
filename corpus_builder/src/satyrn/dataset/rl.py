@@ -18,12 +18,12 @@ from satyrn.dataset.utils.generation import (
     Idea,
     IdeaVariant,
     append_dataset_line,
+    load_ideas,
     output_file_lock,
     pep_identifier,
     prepare_output_file,
-    load_ideas,
 )
-from satyrn.dataset.utils.preview import print_dataset_line, print_ideas
+from satyrn.dataset.utils.preview import print_dataset_line
 from satyrn.dataset.utils.sandbox import Sandbox, get_predecessor_python_version, remove_leftover_containers
 
 logger = logging.getLogger(__name__)
