@@ -18,21 +18,42 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** Resolve a fence's language, defaulting unlabelled blocks to Python. */
+function resolveLanguage(language: string | undefined): string {
+  if (language && hljs.getLanguage(language)) {
+    return language;
+  }
+  // Generated RL prompts are Python tasks, so a bare ``` block is Python code.
+  return "python";
+}
+
+/** Highlight arbitrary code for a fenced block, defaulting to Python. */
+export function highlightCode(code: string, language?: string): string {
+  const resolved = resolveLanguage(language);
+  return hljs.highlight(code, { language: resolved }).value;
+}
+
 /** Highlight a raw Python snippet, returning HTML for use inside a <code>. */
 export function highlightPython(code: string): string {
-  return hljs.highlight(code, { language: "python" }).value;
+  return highlightCode(code, "python");
 }
 
 const markdown = new Marked(
   markedHighlight({
     langPrefix: "hljs language-",
     highlight(code, language) {
-      if (language && hljs.getLanguage(language)) {
-        return hljs.highlight(code, { language }).value;
-      }
-      return escapeHtml(code);
+      return highlightCode(code, language);
     },
   }),
+  {
+    // Give unlabelled fenced blocks an explicit language so that both the
+    // highlighting and the `hljs language-python` class are applied.
+    walkTokens(token) {
+      if (token.type === "code" && !token.lang) {
+        token.lang = "python";
+      }
+    },
+  },
 );
 
 /** Render a markdown string, highlighting fenced code blocks. */

@@ -27,3 +27,12 @@ npm run build
 ```
 
 The backend will then serve the app at `http://127.0.0.1:5000/`.
+
+## Tests
+
+```bash
+npm test
+```
+
+This verifies that prompts are rendered as markdown and that fenced (labelled or
+unlabelled) code blocks receive Python syntax highlighting.
