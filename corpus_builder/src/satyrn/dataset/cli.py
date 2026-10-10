@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 from rich.logging import RichHandler
 
-from satyrn.dataset import cpt, rl, sft, ideas
+from satyrn.dataset import cpt, ideas, rl, sft
 from satyrn.dataset.inputs import collect_doc_changes, download_inputs
 from satyrn.dataset.viewer import app as viewer
 
