@@ -53,14 +53,14 @@ class TestCase:
         )
 
 
-ProblemVariant = Literal["rote_learn", "solve_problem", "hard_practical"]
+ProblemVariant = Literal["rote_learn", "minor_adaptation", "solve_problem", "hard_practical"]
 
 
 def is_problem_variant_compatible_with_idea(problem_variant: ProblemVariant, idea_variant: IdeaVariant) -> bool:
     if idea_variant == "code_demo":
-        return problem_variant in {"rote_learn", "solve_problem"}
+        return problem_variant in {"rote_learn", "solve_problem", "minor_adaptation"}
     elif idea_variant == "use_case":
-        return problem_variant in {"rote_learn", "solve_problem", "hard_practical"}
+        return problem_variant in {"rote_learn", "solve_problem", "minor_adaptation", "hard_practical"}
     else:
         raise ValueError(f"Unknown idea variant {idea_variant}")
 
@@ -272,6 +272,37 @@ understanding of the new Python API rather than algorithmic difficulty.
   specify its return value.
 - Describe how the new Python API or feature helps with solving the problem at hand.
 - Include the solution in the prompt so that the learner can learn by rote learning.
+- In `entry_point`, give only the callable's name.
+- In `solution`, provide a complete reference implementation defining that callable.
+- Provide between {MIN_TEST_CASES} and {MAX_TEST_CASES} independent test cases covering ordinary
+  behavior and every meaningful edge case in this task.
+- Each test case must have a unique descriptive `name`, a human-readable Python `input`, its Python
+  `expected_output`, and executable `test_code` containing an assertion that calls the entry point.
+- A test must not depend on another test, repeat the solution, inspect source code, or use a vacuous
+  assertion. Keep setup inside that test's `test_code`.
+- The solution and tests must be deterministic, use only the Python standard library, perform no
+  network access, and finish quickly.
+- The reference solution's own code must depend on Python {idea.python_version}: it must behave
+  differently, or fail, on the preceding Python feature release. Do not put the version-specific part
+  in the test inputs while the solution stays version-agnostic.
+
+{PYTHON_CODE_RULES}
+"""
+    elif variant == "minor_adaptation":
+        prompt = f"""
+The attached document describes a change in Python version {idea.python_version}. Create a small
+programming task for this idea:
+
+{idea.description}
+
+The task is for evaluation and reinforcement learning, not a tutorial. It should thoroughly test
+understanding of the new Python API rather than algorithmic difficulty.
+
+- In `prompt`, describe the problem, include the exact signature of one callable entry point, and
+  specify its return value.
+- Describe how the new Python API or feature helps with solving the problem at hand.
+- Include an example in the prompt that is *not* the solution that the learner can adapt to implement
+  their solution.
 - In `entry_point`, give only the callable's name.
 - In `solution`, provide a complete reference implementation defining that callable.
 - Provide between {MIN_TEST_CASES} and {MAX_TEST_CASES} independent test cases covering ordinary
