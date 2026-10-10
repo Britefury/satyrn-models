@@ -10,9 +10,10 @@ Key exports:
 import json
 import re
 import threading
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, Iterator
+from typing import Any, Literal
 
 import click
 
