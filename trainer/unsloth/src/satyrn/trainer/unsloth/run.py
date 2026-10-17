@@ -280,7 +280,7 @@ def main(cfg: DictConfig) -> None:
                     dataset = dataset.map(to_chat_prompt)
 
                     sdft_args = SDFTConfig(
-                        output_dir=f"outputs/sdft",
+                        output_dir="outputs/sdft",
                         per_device_train_batch_size=config.sdft.batch_size,
                         per_device_eval_batch_size=config.sdft.eval_batch_size,
                         gradient_accumulation_steps=config.sdft.gradient_accumulation_steps,
@@ -288,29 +288,77 @@ def main(cfg: DictConfig) -> None:
                         eval_strategy="steps",
                         eval_steps=config.sdft.eval_steps,
                         report_to="mlflow",
-                        max_length=config.sdft.seq_len,
                         num_train_epochs=config.sdft.num_train_epochs,
                         max_steps=config.max_steps,
                         learning_rate=config.sdft.learning_rate,
-                        shuffle_dataset=True,
                         bf16=torch.cuda.is_bf16_supported(),
                         fp16=not torch.cuda.is_bf16_supported(),
                         optim=config.optim,
-                        dataset_text_field="text",
+                        # SDFT loss parameters
                         distillation_alpha=config.sdft.distillation_alpha,
+                        distillation_mode=config.sdft.distillation_mode,
+                        distillation_topk=config.sdft.distillation_topk,
+                        distillation_is_clip=config.sdft.distillation_is_clip,
+                        distillation_add_tail=config.sdft.distillation_add_tail,
+                        num_loss_tokens_to_skip=config.sdft.num_loss_tokens_to_skip,
+                        # Teacher parameters
+                        teacher_model_kind=config.sdft.teacher_model_kind,
+                        teacher_update_rate=config.sdft.teacher_update_rate,
+                        teacher_sync_steps=config.sdft.teacher_sync_steps,
+                        # Teacher-conditioned generation
+                        generate_from_teacher=config.sdft.generate_from_teacher,
+                        teacher_prompt_template=config.sdft.teacher_prompt_template,
+                        # Model parameters
+                        model_init_kwargs=config.sdft.model_init_kwargs,
+                        trust_remote_code=config.sdft.trust_remote_code,
+                        disable_dropout=config.sdft.disable_dropout,
+                        # Data preprocessing
+                        remove_unused_columns=config.sdft.remove_unused_columns,
+                        max_prompt_length=config.sdft.max_prompt_length,
+                        shuffle_dataset=config.sdft.shuffle_dataset,
+                        # Generation parameters
+                        num_generations=config.sdft.num_generations,
+                        num_generations_eval=config.sdft.num_generations_eval,
+                        max_completion_length=config.sdft.max_completion_length,
+                        temperature=config.sdft.temperature,
+                        top_p=config.sdft.top_p,
+                        top_k=config.sdft.top_k,
+                        min_p=config.sdft.min_p,
+                        repetition_penalty=config.sdft.repetition_penalty,
+                        cache_implementation=config.sdft.cache_implementation,
+                        generation_kwargs=config.sdft.generation_kwargs,
+                        chat_template_kwargs=config.sdft.chat_template_kwargs,
+                        ds3_gather_for_generation=config.sdft.ds3_gather_for_generation,
+                        # vLLM generation acceleration
+                        use_vllm=config.sdft.use_vllm,
+                        use_teacher_server=config.sdft.use_teacher_server,
+                        vllm_mode=config.sdft.vllm_mode,
+                        vllm_model_impl=config.sdft.vllm_model_impl,
+                        vllm_enable_sleep_mode=config.sdft.vllm_enable_sleep_mode,
+                        vllm_server_base_url=config.sdft.vllm_server_base_url,
+                        vllm_server_host=config.sdft.vllm_server_host,
+                        vllm_server_port=config.sdft.vllm_server_port,
+                        vllm_group_port=config.sdft.vllm_group_port,
+                        vllm_server_timeout=config.sdft.vllm_server_timeout,
+                        vllm_tensor_parallel_size=config.sdft.vllm_tensor_parallel_size,
+                        vllm_gpu_memory_utilization=config.sdft.vllm_gpu_memory_utilization,
+                        vllm_max_model_length=config.sdft.vllm_max_model_length,
+                        # Training parameters
+                        num_iterations=config.sdft.num_iterations,
+                        generation_batch_size=config.sdft.generation_batch_size,
+                        steps_per_generation=config.sdft.steps_per_generation,
                     )
 
-                    sfdft_train = SDFTTrainer(
+                    sdft_train = SDFTTrainer(
                         model=model,
                         tokenizer=tokenizer,
-                        train_dataset=train_dataset,
-                        eval_dataset=eval_dataset,
+                        train_dataset=dataset,
                         args=sdft_args,
                     )
 
                     with mlflow.start_run(run_name="sdft", nested=True):
-                        log_dataset_params(config.datasets.sdft, sfdft_train)
-                        sfdft_train.train()
+                        log_dataset_params(config.datasets.sdft, sdft_train)
+                        sdft_train.train()
 
                     logger.info("Model evaluation after Self-distillation Fine-Tuning (SDFT)")
                     evaluate_model("sdft", model, tokenizer)
