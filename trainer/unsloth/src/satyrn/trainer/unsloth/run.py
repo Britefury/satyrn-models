@@ -38,13 +38,17 @@ CONFIG_DIR = str(Path(__file__).resolve().parents[4] / "configs")
 
 def unsloth_init() -> None:
     """Initialize unsloth and patch the training libraries."""
-    global FastModel, FastVisionModel, GRPOConfig, GRPOTrainer, SFTConfig, SFTTrainer, torch, train_on_responses_only
+    global FastModel, FastVisionModel, GRPOConfig, GRPOTrainer, SFTConfig, SFTTrainer, SDFTConfig, SDFTTrainer, torch, train_on_responses_only
 
     # Unsloth must be imported first to patch transformers, accelerate, etc.
     from unsloth import FastModel, FastVisionModel  # noqa: I001
     from unsloth.chat_templates import train_on_responses_only
     import torch
-    from trl import GRPOConfig, GRPOTrainer, SFTConfig, SFTTrainer
+    from trl.trainer.grpo_config import GRPOConfig
+    from trl.trainer.grpo_trainer import GRPOTrainer
+    from trl.trainer.sft_config import SFTConfig
+    from trl.trainer.sft_trainer import SFTTrainer
+    from trl.experimental.sdft import SDFTConfig, SDFTTrainer
 
     # In notebooks, NotebookProgressCallback logs loss to an IPython handle we cannot capture in the logs
     import transformers.trainer
@@ -269,6 +273,47 @@ def main(cfg: DictConfig) -> None:
 
                     logger.info("Model evaluation after Supervised Fine-Tuning (SFT)")
                     evaluate_model("sft", model, tokenizer)
+
+                if config.datasets.sdft is not None:
+                    logger.info("Starting Self-distillation Fine-Tuning (SDFT) stage")
+                    dataset = load_dataset(config.datasets.sdft)
+                    dataset = dataset.map(to_chat_prompt)
+
+                    sdft_args = SDFTConfig(
+                        output_dir=f"outputs/sdft",
+                        per_device_train_batch_size=config.sdft.batch_size,
+                        per_device_eval_batch_size=config.sdft.eval_batch_size,
+                        gradient_accumulation_steps=config.sdft.gradient_accumulation_steps,
+                        logging_steps=cfg.logging_steps,
+                        eval_strategy="steps",
+                        eval_steps=config.sdft.eval_steps,
+                        report_to="mlflow",
+                        max_length=config.sdft.seq_len,
+                        num_train_epochs=config.sdft.num_train_epochs,
+                        max_steps=config.max_steps,
+                        learning_rate=config.sdft.learning_rate,
+                        shuffle_dataset=True,
+                        bf16=torch.cuda.is_bf16_supported(),
+                        fp16=not torch.cuda.is_bf16_supported(),
+                        optim=config.optim,
+                        dataset_text_field="text",
+                        distillation_alpha=config.sdft.distillation_alpha,
+                    )
+
+                    sfdft_train = SDFTTrainer(
+                        model=model,
+                        tokenizer=tokenizer,
+                        train_dataset=train_dataset,
+                        eval_dataset=eval_dataset,
+                        args=sdft_args,
+                    )
+
+                    with mlflow.start_run(run_name="sdft", nested=True):
+                        log_dataset_params(config.datasets.sdft, sfdft_train)
+                        sfdft_train.train()
+
+                    logger.info("Model evaluation after Self-distillation Fine-Tuning (SDFT)")
+                    evaluate_model("sdft", model, tokenizer)
 
                 if config.datasets.rl is not None:
                     logger.info("Starting Reinforcement Learning (RL) stage")
