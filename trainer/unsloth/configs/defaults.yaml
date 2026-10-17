@@ -37,6 +37,7 @@ mlflow:
 datasets:
   cpt: null
   sft: null
+  sdft: null
   rl: null
 
 cpt:
@@ -60,6 +61,9 @@ sft:
   eval_steps: 3
   gradient_accumulation_steps: 1
   num_train_epochs: 1
+  learning_rate: 2e-4
+
+sdft:
   learning_rate: 2e-4
 
 rl:

@@ -5,14 +5,14 @@ from __future__ import annotations
 import logging
 import operator
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from omegaconf import DictConfig, OmegaConf
 from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
-StageName = Literal["pre", "cpt", "sft", "rl"]
+StageName = Literal["pre", "cpt", "sft", "sdft", "rl"]
 
 
 def basename(path: str) -> str:
@@ -126,7 +126,6 @@ class SftStageConfig(BaseModel):
 class SdftStageConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    seq_len: int
     batch_size: int
     eval_batch_size: int
     eval_steps: int
@@ -161,9 +160,84 @@ class SdftStageConfig(BaseModel):
     generate_from_teacher: bool = False
     # Template used to combine the student prompt and privileged context into the teacher prompt.
     teacher_prompt_template: str = "{prompt}\n\n{privileged_context}"
-    
 
+    # Model parameters
+    # Keyword arguments for transformers.AutoModelForCausalLM.from_pretrained, used when the model argument of the SDFTTrainer is provided as a string.
+    model_init_kwargs: dict[str, Any] | None = None
+    # Whether to allow loading models and tokenizers that ship custom Python code from the Hub.
+    trust_remote_code: bool = False
+    # Whether to disable dropout in the student and teacher models.
+    disable_dropout: bool = True
 
+    # Data preprocessing
+    # Whether to only keep the columns required by the trainer in the dataset.
+    remove_unused_columns: bool = False
+    # Maximum prompt length. Longer prompts are truncated from the left.
+    max_prompt_length: int | None = 512
+    # Whether to shuffle the training dataset.
+    shuffle_dataset: bool = True
+
+    # Generation parameters
+    # Number of generations to sample.
+    num_generations: int = 8
+    # Number of generations to sample during evaluation. None uses num_generations.
+    num_generations_eval: int | None = None
+    # Maximum length of the generated completion.
+    max_completion_length: int | None = 256
+    # Temperature for sampling.
+    temperature: float = 1.0
+    # Cumulative probability of the top tokens to consider.
+    top_p: float = 1.0
+    # Number of highest probability vocabulary tokens to keep for top-k-filtering. 0 disables it.
+    top_k: int = 0
+    # Minimum token probability, scaled by the probability of the most likely token.
+    min_p: float | None = None
+    # Float that penalizes new tokens based on whether they appear in the prompt and generated text so far.
+    repetition_penalty: float = 1.0
+    # Implementation of the cache method for faster generation when use_vllm is False.
+    cache_implementation: str | None = None
+    # Additional keyword arguments passed to GenerationConfig or SamplingParams when sampling completions.
+    generation_kwargs: dict[str, Any] | None = None
+    # Additional keyword arguments passed to apply_chat_template when generating completions.
+    chat_template_kwargs: dict[str, Any] | None = None
+    # Whether to gather the policy model weights for generation under DeepSpeed ZeRO-3.
+    ds3_gather_for_generation: bool = True
+
+    # vLLM generation acceleration
+    # Whether to use vLLM for generating completions instead of the default model.generate().
+    use_vllm: bool = False
+    # Whether to compute teacher logprobs from the running vLLM generation server.
+    use_teacher_server: bool = False
+    # Mode to use for vLLM integration when use_vllm is True. One of 'server' or 'colocate'.
+    vllm_mode: str = "colocate"
+    # Model implementation to use for vLLM. One of 'transformers' or 'vllm'.
+    vllm_model_impl: str = "vllm"
+    # Enable vLLM sleep mode to offload weights/cache during the optimizer step.
+    vllm_enable_sleep_mode: bool = False
+    # Base URL for the vLLM server. If provided, vllm_server_host and vllm_server_port are ignored.
+    vllm_server_base_url: str | None = None
+    # Host of the vLLM server to connect to.
+    vllm_server_host: str = "0.0.0.0"
+    # Port of the vLLM server to connect to.
+    vllm_server_port: int = 8000
+    # Port number for the weight update group.
+    vllm_group_port: int = 51216
+    # Total timeout duration in seconds to wait for the vLLM server to be up.
+    vllm_server_timeout: float = 240.0
+    # Tensor parallel size for vLLM when vllm_mode is 'colocate'.
+    vllm_tensor_parallel_size: int = 1
+    # GPU memory utilization for vLLM when vllm_mode is 'colocate'.
+    vllm_gpu_memory_utilization: float = 0.3
+    # Context window for vLLM. If omitted, it is inferred from the model config.
+    vllm_max_model_length: int | None = None
+
+    # Training parameters
+    # Number of iterations per batch.
+    num_iterations: int = 1
+    # Batch size to use for generation. None defaults to the effective training batch size.
+    generation_batch_size: int | None = None
+    # Number of steps per generation. None defaults to gradient_accumulation_steps.
+    steps_per_generation: int | None = None
 
 
 class RlStageConfig(BaseModel):
