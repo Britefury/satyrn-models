@@ -279,6 +279,7 @@ def main(cfg: DictConfig) -> None:
                 if config.datasets.sdft is not None:
                     logger.info("Starting Self-distillation Fine-Tuning (SDFT) stage")
                     dataset = load_dataset(config.datasets.sdft)
+                    raise NotImplementedError("No dataset -> SDFT mapping yet")
                     dataset = dataset.map(to_chat_prompt)
 
                     sdft_args = SDFTConfig(
