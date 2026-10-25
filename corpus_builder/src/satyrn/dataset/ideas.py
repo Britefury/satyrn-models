@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from satyrn.dataset.llm.models import SchemaValidationError, get_llm
 from satyrn.dataset.utils.generation import (
+    IdeaVariant,
     append_dataset_line,
     collect_input_docs,
     generate_ideas,
@@ -41,12 +42,20 @@ PASS_MARKER = "__SATYRN_TEST_PASSED__"
     help="JSONL file to write the generated dataset to.",
 )
 @click.option("--python-version", required=True, help='Python version the dataset addresses, e.g. "3.15".')
+@click.option(
+    "--idea-variant",
+    "idea_variant",
+    type=click.Choice(list(IdeaVariant.__args__)),
+    required=True,
+    help="Which type of idea; {}".format("|".join(IdeaVariant.__args__)),
+)
 @click.option("--preview", is_flag=True, default=False, help="Print each idea after it is saved.")
 @click.option("--workers", type=click.IntRange(min=1), default=1, help="Number of lines to generate in parallel.")
 def main(
     input_path: Path,
     output_path: Path,
     python_version: str,
+    idea_variant: IdeaVariant,
     preview: bool,
     workers: int,
 ) -> None:
@@ -59,7 +68,7 @@ def main(
     def process_doc(doc_path: Path) -> None:
         """Generate and write every testable task for one source document."""
         try:
-            ideas = generate_ideas(model, doc_path, python_version)
+            ideas = generate_ideas(model, doc_path, python_version, variant=idea_variant)
         except SchemaValidationError:
             # After repeated attempts, we did not get a response that satisfied the schema requirements
             logger.warning(f"Failed to generate schema compliant output for {doc_path.name}")

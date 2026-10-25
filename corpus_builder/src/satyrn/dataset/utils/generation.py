@@ -13,7 +13,7 @@ import threading
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import click
 
@@ -31,7 +31,31 @@ PYTHON_CODE_RULES = """
   such as C API changes, shell commands and CLI invocations, build configuration, etc.
 """
 
+USE_CASE_RULES = """
+- The idea must exercise Python and should not require shell command or CLI invocation.
+- The use case should run non-interactively to completion without requiring a real terminal.
+- The problem should be solvable with code that terminates within a few seconds; no infinite loops or blocking waits.
+- Only propose problems that can be solved with Pure Python. Skip anything that cannot be solved with a Python code
+  example, such as requiring C API changes, requiring shell commands or CLI invocations, build configuration, etc.
+"""
+
+USE_CASE_IMPLEMENTATIONS = """
+- Use Python API calls (e.g. call a module's functions directly instead of `python -m module ...`).
+- The code must run non-interactively to completion without requiring a real terminal.
+- Only write Python code. Skip anything that cannot be expressed as a Python code example,
+  such as C API changes, shell commands and CLI invocations, build configuration, etc.
+"""
+
 output_file_lock = threading.Lock()
+
+
+# There are three variants of ideas that we can generate:
+# - `code_demo` (default): self-contained code blocks that would demonstrate the described feature
+# - `use_case`: practical problems that would benefit from the use of the feature under consideration that state
+#   that the solution should use this feature
+# - `hard_use_case`: practical problems that would benefit from the use of the feature under consideration
+#   that explicitly avoid mentioning the feature that the idea explores
+IdeaVariant = Literal["code_demo", "use_case"]
 
 
 @dataclass
@@ -41,6 +65,7 @@ class Idea:
     doc_path: Path
     description: str
     python_version: str
+    variant: IdeaVariant
 
 
 def pep_identifier(doc_path: Path) -> str | None:
@@ -49,9 +74,10 @@ def pep_identifier(doc_path: Path) -> str | None:
     return f"PEP {int(match.group(1))}" if match else None
 
 
-def generate_ideas(model: Model, doc_path: Path, python_version: str) -> list[Idea]:
+def generate_ideas(model: Model, doc_path: Path, python_version: str, variant: IdeaVariant = "code_demo") -> list[Idea]:
     """Return distinct Python example ideas for features described in doc_path."""
-    prompt = f"""
+    if variant == "code_demo":
+        prompt = f"""
 The attached document describes a change in Python version {python_version}. Describe between 0 and 50
 ideas for short, self-contained code blocks that would demonstrate the described features.
 
@@ -59,10 +85,29 @@ ideas for short, self-contained code blocks that would demonstrate the described
 - Propose fewer ideas if the document only covers a small change.
 - Do not repeat the same idea.
 - DO NOT propose ideas for parts of the document that cannot be demonstrated in Python, such as
-  C API changes, shell commands and CLI invocations, or build configuration.
+C API changes, shell commands and CLI invocations, or build configuration.
 
 {PYTHON_CODE_RULES}
-    """
+"""
+    elif variant == "use_case":
+        # Perhaps we should use the phrase 'making it more robust' rather than 'making it more secure'?
+        prompt = f"""
+The attached document describes a change in Python version {python_version}. Describe between 0 and 50
+ideas for short practical Python programming problems that could benefit from the use of the described features.
+
+- Each idea is a short description of a practical situation that can be solved with pure Python where the use
+  of the described feature improves the code by simplifying it, making it more robust, making it more secure,
+  making it more elegant or a combination of the aforementioned.
+- Propose fewer ideas if the document only covers a small change.
+- Do not repeat the same idea.
+- Propose fewer ideas when the ideas start becoming too similar to previous ideas.
+- DO NOT propose ideas for parts of the document that cannot be demonstrated in Python, such as
+C API changes, shell commands and CLI invocations, or build configuration.
+
+{USE_CASE_RULES}
+"""
+    else:
+        raise ValueError(f"Unknown idea variant {variant}")
     schema = {
         "type": "object",
         "properties": {
@@ -78,7 +123,7 @@ ideas for short, self-contained code blocks that would demonstrate the described
     context.add(doc_path.name, doc_path)
     context.set_json_schema(schema)
     response = model.generate(prompt, context, thinking=True)
-    return [Idea(doc_path, description, python_version) for description in response["ideas"]]
+    return [Idea(doc_path, description, python_version, variant=variant) for description in response["ideas"]]
 
 
 def prepare_output_file(output_path: Path) -> None:
@@ -107,6 +152,7 @@ def read_jsonl_file(input_path: Path) -> Iterator[dict[str, Any]]:
 
 
 def load_ideas(input_path: Path) -> list[Idea]:
+    d: dict[str, str | Path | IdeaVariant]
     ideas: list[Idea] = []
     for d in read_jsonl_file(input_path):
         # We have to convert the document path from a str to a Path
