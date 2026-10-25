@@ -6,7 +6,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 import click
 from tqdm import tqdm
@@ -17,6 +17,7 @@ from satyrn.dataset.utils.generation import (
     PYTHON_CODE_RULES,
     SYSTEM_PROMPT,
     Idea,
+    IdeaVariant,
     append_dataset_line,
     load_ideas,
     output_file_lock,
@@ -53,6 +54,22 @@ class TestCase:
         )
 
 
+ProblemVariant = Literal["rote_learn", "minor_adaptation", "solve_problem", "hard_practical"]
+
+
+def is_problem_variant_compatible_with_idea(problem_variant: ProblemVariant, idea_variant: IdeaVariant) -> bool:
+    if idea_variant == "code_demo":
+        return problem_variant in {"rote_learn", "solve_problem", "minor_adaptation"}
+    elif idea_variant == "use_case":
+        return problem_variant in {"rote_learn", "solve_problem", "minor_adaptation", "hard_practical"}
+    else:
+        raise ValueError(f"Unknown idea variant {idea_variant}")
+
+
+class ProblemVariantIncompatibleWithIdea(Exception):
+    pass
+
+
 @dataclass(frozen=True)
 class Problem:
     """A generated programming problem and its reference solution."""
@@ -61,15 +78,17 @@ class Problem:
     entry_point: str
     solution: str
     test_cases: list[TestCase]
+    variant: ProblemVariant
 
     @classmethod
-    def from_dict(cls, value: dict) -> Self:
+    def from_dict(cls, value: dict, variant: ProblemVariant) -> Self:
         """Construct a typed problem from the model's JSON-compatible response."""
         return cls(
             prompt=value["prompt"],
             entry_point=value["entry_point"],
             solution=value["solution"],
             test_cases=[TestCase.from_dict(test_case) for test_case in value["test_cases"]],
+            variant=variant,
         )
 
     def to_dict(self) -> dict:
@@ -231,9 +250,17 @@ case or whose assertions could pass without exercising the entry point.
     return model.generate(prompt, context)
 
 
-def generate_problem(model: Model, idea: Idea, sandbox: Sandbox, predecessor_sandbox: Sandbox) -> Problem:
+def generate_problem(
+    model: Model, idea: Idea, sandbox: Sandbox, predecessor_sandbox: Sandbox, variant: ProblemVariant
+) -> Problem:
     """Return a reference-solved problem with a verified, independently scored test suite."""
-    prompt = f"""
+    if not is_problem_variant_compatible_with_idea(variant, idea.variant):
+        raise ProblemVariantIncompatibleWithIdea(
+            f"Problem variant {variant} is not compatible with idea variant {idea.variant}"
+        )
+
+    if variant == "rote_learn":
+        prompt = f"""
 The attached document describes a change in Python version {idea.python_version}. Create a small
 programming task for this idea:
 
@@ -243,7 +270,11 @@ The task is for evaluation and reinforcement learning, not a tutorial. It should
 understanding of the new Python API rather than algorithmic difficulty.
 
 - In `prompt`, describe the problem, include the exact signature of one callable entry point, and
-  specify its return value. Do not reveal the solution.
+  specify its return value.
+- Describe how the new Python API or feature helps with solving the problem at hand.
+- Include the solution in the prompt so that the learner can learn by rote learning.
+- Ensure that any code blocks in the prompt are contained within triple backticks with the language
+  identified, and code snippets within backticks.
 - In `entry_point`, give only the callable's name.
 - In `solution`, provide a complete reference implementation defining that callable.
 - Provide between {MIN_TEST_CASES} and {MAX_TEST_CASES} independent test cases covering ordinary
@@ -259,7 +290,105 @@ understanding of the new Python API rather than algorithmic difficulty.
   in the test inputs while the solution stays version-agnostic.
 
 {PYTHON_CODE_RULES}
-    """
+"""
+    elif variant == "minor_adaptation":
+        prompt = f"""
+The attached document describes a change in Python version {idea.python_version}. Create a small
+programming task for this idea:
+
+{idea.description}
+
+The task is for evaluation and reinforcement learning, not a tutorial. It should thoroughly test
+understanding of the new Python API rather than algorithmic difficulty.
+
+- In `prompt`, describe the problem, include the exact signature of one callable entry point, and
+  specify its return value.
+- Describe how the new Python API or feature helps with solving the problem at hand.
+- Include an example in the prompt that is *not* the solution that the learner can adapt to implement
+  their solution.
+- Ensure that any code blocks in the prompt are contained within triple backticks with the language
+  identified, and code snippets within backticks.
+- In `entry_point`, give only the callable's name.
+- In `solution`, provide a complete reference implementation defining that callable.
+- Provide between {MIN_TEST_CASES} and {MAX_TEST_CASES} independent test cases covering ordinary
+  behavior and every meaningful edge case in this task.
+- Each test case must have a unique descriptive `name`, a human-readable Python `input`, its Python
+  `expected_output`, and executable `test_code` containing an assertion that calls the entry point.
+- A test must not depend on another test, repeat the solution, inspect source code, or use a vacuous
+  assertion. Keep setup inside that test's `test_code`.
+- The solution and tests must be deterministic, use only the Python standard library, perform no
+  network access, and finish quickly.
+- The reference solution's own code must depend on Python {idea.python_version}: it must behave
+  differently, or fail, on the preceding Python feature release. Do not put the version-specific part
+  in the test inputs while the solution stays version-agnostic.
+
+{PYTHON_CODE_RULES}
+"""
+    elif variant == "solve_problem":
+        prompt = f"""
+The attached document describes a change in Python version {idea.python_version}. Create a small
+programming task for this idea:
+
+{idea.description}
+
+The task is for evaluation and reinforcement learning, not a tutorial. It should thoroughly test
+understanding of the new Python API rather than algorithmic difficulty.
+
+- In `prompt`, describe the problem, include the exact signature of one callable entry point, and
+  specify its return value. Do not reveal the solution.
+- Ensure that any code blocks in the prompt are contained within triple backticks with the language
+  identified, and code snippets within backticks.
+- In `entry_point`, give only the callable's name.
+- In `solution`, provide a complete reference implementation defining that callable.
+- Provide between {MIN_TEST_CASES} and {MAX_TEST_CASES} independent test cases covering ordinary
+  behavior and every meaningful edge case in this task.
+- Each test case must have a unique descriptive `name`, a human-readable Python `input`, its Python
+  `expected_output`, and executable `test_code` containing an assertion that calls the entry point.
+- A test must not depend on another test, repeat the solution, inspect source code, or use a vacuous
+  assertion. Keep setup inside that test's `test_code`.
+- The solution and tests must be deterministic, use only the Python standard library, perform no
+  network access, and finish quickly.
+- The reference solution's own code must depend on Python {idea.python_version}: it must behave
+  differently, or fail, on the preceding Python feature release. Do not put the version-specific part
+  in the test inputs while the solution stays version-agnostic.
+
+{PYTHON_CODE_RULES}
+"""
+    elif variant == "hard_practical":
+        prompt = f"""
+The attached document describes a change in Python version {idea.python_version}. Create a small
+programming task for this idea:
+
+{idea.description}
+
+The task is for evaluation and reinforcement learning, not a tutorial. It should thoroughly test
+understanding of the new Python API rather than algorithmic difficulty.
+
+- In `prompt`, describe the problem, include the exact signature of one callable entry point, and
+  specify its return value. Do not reveal the solution.
+- Do not mention the new Python API or feature by name; the learner should choose to use it to solve
+  the problem at hand.
+- Ensure that any code blocks in the prompt are contained within triple backticks with the language
+  identified, and code snippets within backticks.
+- In `entry_point`, give only the callable's name.
+- In `solution`, provide a complete reference implementation defining that callable.
+- Provide between {MIN_TEST_CASES} and {MAX_TEST_CASES} independent test cases covering ordinary
+  behavior and every meaningful edge case in this task.
+- Each test case must have a unique descriptive `name`, a human-readable Python `input`, its Python
+  `expected_output`, and executable `test_code` containing an assertion that calls the entry point.
+- A test must not depend on another test, repeat the solution, inspect source code, or use a vacuous
+  assertion. Keep setup inside that test's `test_code`.
+- The solution and tests must be deterministic, use only the Python standard library, perform no
+  network access, and finish quickly.
+- The reference solution's own code must depend on Python {idea.python_version}: it must behave
+  differently, or fail, on the preceding Python feature release. Do not put the version-specific part
+  in the test inputs while the solution stays version-agnostic.
+
+{PYTHON_CODE_RULES}
+"""
+    else:
+        raise ValueError(f"Unknown problem variant {variant}")
+
     context = Context()
     context.system_prompt = SYSTEM_PROMPT
     context.add(idea.doc_path.name, idea.doc_path)
@@ -270,7 +399,7 @@ understanding of the new Python API rather than algorithmic difficulty.
         generated_problem = model.generate(prompt, context, thinking=True)
         if not isinstance(generated_problem, dict):
             raise TypeError("Problem-writing model did not return a JSON object")
-        problem = Problem.from_dict(generated_problem)
+        problem = Problem.from_dict(generated_problem, variant)
         try:
             _validate_problem_structure(problem)
         except ValueError as error:
@@ -304,10 +433,12 @@ Generate a corrected complete task and test suite.
     raise ValueError(f"Could not generate a verified task for idea: {idea.description}")
 
 
-def build_dataset_line(model: Model, idea: Idea, sandbox: Sandbox, predecessor_sandbox: Sandbox) -> dict | None:
+def build_dataset_line(
+    model: Model, idea: Idea, sandbox: Sandbox, predecessor_sandbox: Sandbox, variant: ProblemVariant
+) -> dict | None:
     """Return one verified evaluation/RL row for idea, or None when generation fails."""
     try:
-        problem = generate_problem(model, idea, sandbox, predecessor_sandbox)
+        problem = generate_problem(model, idea, sandbox, predecessor_sandbox, variant)
     except Exception as error:
         logger.error("Skipping idea: %s", error)
         return None
@@ -346,12 +477,20 @@ def build_dataset_line(model: Model, idea: Idea, sandbox: Sandbox, predecessor_s
     help="JSONL file to write the generated dataset to.",
 )
 @click.option("--python-version", required=True, help='Python version the dataset addresses, e.g. "3.15".')
+@click.option(
+    "--problem-variant",
+    "problem_variant",
+    type=click.Choice(list(ProblemVariant.__args__)),
+    default="compose",
+    help="Which type of problem; {}".format("|".join(ProblemVariant.__args__)),
+)
 @click.option("--preview", is_flag=True, default=False, help="Print each dataset line after it is saved.")
 @click.option("--workers", type=click.IntRange(min=1), default=1, help="Number of lines to generate in parallel.")
 def main(
     ideas_path: Path,
     output_path: Path,
     python_version: str,
+    problem_variant: ProblemVariant,
     preview: bool,
     workers: int,
 ) -> None:
@@ -367,7 +506,7 @@ def main(
     try:
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = [
-                executor.submit(build_dataset_line, model, idea, sandbox, predecessor_sandbox)
+                executor.submit(build_dataset_line, model, idea, sandbox, predecessor_sandbox, problem_variant)
                 for idea in ideas
             ]
             for future in tqdm(as_completed(futures), total=len(ideas), desc="Ideas"):
