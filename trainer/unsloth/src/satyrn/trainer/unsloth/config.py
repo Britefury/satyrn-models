@@ -156,11 +156,17 @@ class SdftStageConfig(BaseModel):
     teacher_sync_steps: int = 1
 
     # Privileged context
-    # Instruction prepended to the teacher's privileged context, telling the teacher that the
-    # provided demonstration (reasoning trace and answer) should be re-written in its own words.
-    privileged_context_prompt: str = (
+    # Jinja2 template rendering the teacher's privileged context, including the instruction that
+    # the demonstration should be re-written in the model's own words. Available variables:
+    # trace, code, answer, expected_output. `trace` is None unless thinking is enabled. Compiled
+    # once per dataset.
+    privileged_context_template: str = (
         "The reasoning trace and answer below are a demonstration for this task. "
-        "They should be re-written in your own words rather than copied verbatim."
+        "They should be re-written in your own words rather than copied verbatim.\n\n"
+        "{% if trace %}Reasoning trace:\n{{ trace }}\n\n{% endif %}"
+        "Code:\n{{ code }}\n\n"
+        "Answer:\n{{ answer }}\n\n"
+        "Expected output:\n{{ expected_output }}"
     )
 
     # Teacher-conditioned generation
