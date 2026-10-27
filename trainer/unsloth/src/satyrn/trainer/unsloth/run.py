@@ -6,7 +6,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import hydra
 import mlflow
@@ -82,6 +82,30 @@ def render_conversations_into_text_field(
 
     # A row still holding prompt and completion columns takes the trainer's prompt-completion
     # path, which masks by prompt length and ignores the text column.
+    return dataset.map(render, remove_columns=dataset.column_names)
+
+
+def render_sdft_conversations_into_text_field(
+    dataset: Dataset, enable_thinking: bool
+) -> Dataset:
+    """
+    Reshape each row into `{"prompt": <messages>, "privileged_context": <messages>}` for SDFTTrainer.
+
+    The prompt stays conversational: SDFTTrainer applies the chat template itself, with
+    `add_generation_prompt=True` and its configured `chat_template_kwargs`, and the teacher
+    context builder needs the message list to extract the last user turn."""
+
+    def render(row: dict[str, Any]) -> dict[str, Any]:
+        assistant: dict[str, Any] = dict(row["completion"][0])
+        if enable_thinking:
+            assistant["reasoning_content"] = row["trace"]
+        return {
+            "prompt": row["prompt"],
+            "privileged_context": [assistant],
+        }
+
+    # Keep only the columns SDFTTrainer declares in _signature_columns; a lingering completion
+    # column would take the trainer's prompt-completion path instead of the rollout path.
     return dataset.map(render, remove_columns=dataset.column_names)
 
 
@@ -279,8 +303,7 @@ def main(cfg: DictConfig) -> None:
                 if config.datasets.sdft is not None:
                     logger.info("Starting Self-distillation Fine-Tuning (SDFT) stage")
                     dataset = load_dataset(config.datasets.sdft)
-                    raise NotImplementedError("No dataset -> SDFT mapping yet")
-                    dataset = dataset.map(to_chat_prompt)
+                    dataset = render_sdft_conversations_into_text_field(dataset, config.model.enable_thinking)
 
                     sdft_args = SDFTConfig(
                         output_dir="outputs/sdft",
@@ -330,7 +353,12 @@ def main(cfg: DictConfig) -> None:
                         repetition_penalty=config.sdft.repetition_penalty,
                         cache_implementation=config.sdft.cache_implementation,
                         generation_kwargs=config.sdft.generation_kwargs,
-                        chat_template_kwargs=config.sdft.chat_template_kwargs,
+                        # enable_thinking drives the template the trainer applies; an explicit
+                        # chat_template_kwargs entry may override it.
+                        chat_template_kwargs={
+                            "enable_thinking": config.model.enable_thinking,
+                            **(config.sdft.chat_template_kwargs or {}),
+                        },
                         ds3_gather_for_generation=config.sdft.ds3_gather_for_generation,
                         # vLLM generation acceleration
                         use_vllm=config.sdft.use_vllm,
