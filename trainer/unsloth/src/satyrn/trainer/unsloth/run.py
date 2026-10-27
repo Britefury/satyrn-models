@@ -86,22 +86,40 @@ def render_conversations_into_text_field(
 
 
 def render_sdft_conversations_into_text_field(
-    dataset: Dataset, enable_thinking: bool
+    dataset: Dataset, enable_thinking: bool, privileged_context_prompt: str
 ) -> Dataset:
     """
-    Reshape each row into `{"prompt": <messages>, "privileged_context": <messages>}` for SDFTTrainer.
+    Reshape each row into `{"prompt": <messages>, "privileged_context": <text>}` for SDFTTrainer.
 
     The prompt stays conversational: SDFTTrainer applies the chat template itself, with
     `add_generation_prompt=True` and its configured `chat_template_kwargs`, and the teacher
-    context builder needs the message list to extract the last user turn."""
+    context builder needs the message list to extract the last user turn. The privileged context
+    is a plain string because the trainer's stringifier only reads message `content`, dropping any
+    separate reasoning field."""
 
     def render(row: dict[str, Any]) -> dict[str, Any]:
-        assistant: dict[str, Any] = dict(row["completion"][0])
+        """
+        `row` is a dict that takes the form `{
+            "prompt": [{"role": "user", "content": <prompt>}],
+            "completion": [{"role": "assistant", "content": <response>}],
+            "filename": idea.doc_path.name,
+            "pep": pep_identifier(idea.doc_path),
+            "python_version": idea.python_version,
+            "idea": idea.description,
+            "code": code_block["code"],
+            "trace": code_block["trace"],
+            "expected_output": code_block["expected_output"],
+        }`
+        """
+        parts = [privileged_context_prompt]
         if enable_thinking:
-            assistant["reasoning_content"] = row["trace"]
+            parts.append(f"Reasoning trace:\n{row['trace']}")
+        parts.append(f"Code:\n{row['code']}")
+        parts.append(f"Answer:\n{row['completion'][0].get('content', '')}")
+        parts.append(f"Expected output:\n{row['expected_output']}")
         return {
             "prompt": row["prompt"],
-            "privileged_context": [assistant],
+            "privileged_context": "\n\n".join(parts),
         }
 
     # Keep only the columns SDFTTrainer declares in _signature_columns; a lingering completion
@@ -303,7 +321,9 @@ def main(cfg: DictConfig) -> None:
                 if config.datasets.sdft is not None:
                     logger.info("Starting Self-distillation Fine-Tuning (SDFT) stage")
                     dataset = load_dataset(config.datasets.sdft)
-                    dataset = render_sdft_conversations_into_text_field(dataset, config.model.enable_thinking)
+                    dataset = render_sdft_conversations_into_text_field(
+                        dataset, config.model.enable_thinking, config.sdft.privileged_context_prompt
+                    )
 
                     sdft_args = SDFTConfig(
                         output_dir="outputs/sdft",

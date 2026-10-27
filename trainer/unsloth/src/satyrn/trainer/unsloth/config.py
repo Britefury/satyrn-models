@@ -155,6 +155,14 @@ class SdftStageConfig(BaseModel):
     # Number of optimizer steps between teacher updates.
     teacher_sync_steps: int = 1
 
+    # Privileged context
+    # Instruction prepended to the teacher's privileged context, telling the teacher that the
+    # provided demonstration (reasoning trace and answer) should be re-written in its own words.
+    privileged_context_prompt: str = (
+        "The reasoning trace and answer below are a demonstration for this task. "
+        "They should be re-written in your own words rather than copied verbatim."
+    )
+
     # Teacher-conditioned generation
     # Whether on-policy generation should use the teacher-conditioned prompt instead of the student prompt.
     generate_from_teacher: bool = False
