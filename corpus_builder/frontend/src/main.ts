@@ -1,12 +1,13 @@
 import "highlight.js/styles/github-dark.css";
 import "./style.css";
 import { renderMarkdown, highlightPython, escapeHtml } from "./markdown";
-import type { DatasetItem, DatasetResponse, TestCase } from "./types";
+import { collectMessages, messageContent, messageRole, messageRoleLabel } from "./conversations";
+import type { DatasetItem, DatasetResponse, Message, TestCase } from "./types";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
 /** Keys handled explicitly by the renderer rather than the generic fallback. */
-const KNOWN_KEYS = new Set(["prompt", "solution", "test_cases", "metadata", "_viewer"]);
+const KNOWN_KEYS = new Set(["prompt", "completion", "messages", "solution", "test_cases", "metadata", "_viewer"]);
 
 function codeBlock(code: string, language = "python"): string {
   const highlighted = language === "python" ? highlightPython(code) : escapeHtml(code);
@@ -33,8 +34,11 @@ function itemTitle(item: DatasetItem, index: number): string {
   if (typeof idea === "string" && idea) {
     return idea;
   }
-  const prompt = typeof item.prompt === "string" ? item.prompt.replace(/[#*`]/g, "").trim() : "";
-  return prompt.split("\n")[0]?.slice(0, 60) || `Item ${index + 1}`;
+  const prompt = collectMessages(item)
+    .map((message) => (typeof message.content === "string" ? message.content : ""))
+    .find((content) => content.length > 0);
+  const cleaned = prompt?.replace(/[#*`]/g, "").trim() ?? "";
+  return cleaned.split("\n")[0]?.slice(0, 60) || `Item ${index + 1}`;
 }
 
 function itemSubtitle(item: DatasetItem): string {
@@ -134,6 +138,41 @@ function renderGenericValue(key: string, value: unknown): HTMLElement {
   return container;
 }
 
+function renderMessage(message: Message): HTMLElement {
+  const role = messageRole(message);
+  const roleClass = role.replace(/[^a-z0-9_-]/g, "") || "message";
+
+  const article = document.createElement("article");
+  article.className = `message message-${roleClass}`;
+
+  const header = document.createElement("header");
+  header.className = "message-header";
+  header.textContent = messageRoleLabel(message);
+  article.append(header);
+
+  const content = messageContent(message);
+  const body = document.createElement("div");
+  if (content === null) {
+    body.className = "message-body";
+    body.innerHTML = codeBlock(JSON.stringify(message.content ?? message, null, 2), "json");
+  } else {
+    body.className = "message-body markdown";
+    body.innerHTML = renderMarkdown(content);
+  }
+  article.append(body);
+
+  return article;
+}
+
+function renderConversation(messages: Message[]): HTMLElement {
+  const wrapper = document.createElement("div");
+  wrapper.className = "conversation";
+  for (const message of messages) {
+    wrapper.append(renderMessage(message));
+  }
+  return wrapper;
+}
+
 function renderItem(item: DatasetItem): HTMLElement {
   const article = document.createElement("article");
   article.className = "item";
@@ -153,7 +192,10 @@ function renderItem(item: DatasetItem): HTMLElement {
     article.append(section("Metadata", renderMetadata(item.metadata)));
   }
 
-  if (typeof item.prompt === "string" && item.prompt) {
+  const messages = collectMessages(item);
+  if (messages.length > 0) {
+    article.append(section("Conversation", renderConversation(messages)));
+  } else if (typeof item.prompt === "string" && item.prompt) {
     article.append(section("Prompt", `<div class="markdown">${renderMarkdown(item.prompt)}</div>`));
   }
 

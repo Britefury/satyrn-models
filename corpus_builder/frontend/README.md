@@ -34,5 +34,6 @@ The backend will then serve the app at `http://127.0.0.1:5000/`.
 npm test
 ```
 
-This verifies that prompts are rendered as markdown and that fenced (labelled or
-unlabelled) code blocks receive Python syntax highlighting.
+This verifies that prompts and conversation messages are rendered as markdown,
+that prompts/completions are combined into user/assistant turns, and that fenced
+(labelled or unlabelled) code blocks receive Python syntax highlighting.

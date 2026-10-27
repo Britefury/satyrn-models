@@ -1,7 +1,15 @@
 /** Shared types describing a generated evaluation/RL dataset row. */
 
+export interface Message {
+  role?: string;
+  content?: unknown;
+  [key: string]: unknown;
+}
+
 export interface DatasetItem {
-  prompt?: string;
+  prompt?: string | Message[];
+  completion?: string | Message[];
+  messages?: Message[];
   solution?: string;
   test_cases?: TestCase[];
   metadata?: Record<string, unknown>;
