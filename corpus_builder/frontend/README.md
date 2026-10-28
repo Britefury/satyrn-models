@@ -1,6 +1,6 @@
 # Satyrn Dataset Viewer — frontend
 
-TypeScript single-page app that renders a generated JSONL dataset. It is built by
+TypeScript + React single-page app that renders a generated JSONL dataset. It is built by
 Vite into `../src/satyrn/dataset/viewer/static/` and served by the Flask backend.
 
 ## Development
