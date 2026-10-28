@@ -72,8 +72,14 @@ def test_eval_batch_uses_num_generations_eval_when_set() -> None:
     assert build(num_generations_eval=4, eval_batch_size=8).num_generations_eval == 4
 
 
-def test_group_needs_at_least_two_completions() -> None:
-    assert "num_generations must be at least 2" in error_text(num_generations=1)
+def test_single_completion_per_prompt_is_allowed() -> None:
+    """The distillation loss has no group advantage, so one rollout per prompt is enough."""
+    config = build(num_generations=1, num_generations_eval=1)
+
+    assert config.num_generations == 1
+    assert config.num_generations_eval == 1
+    assert "num_generations must be at least 1" in error_text(num_generations=0)
+    assert "num_generations_eval must be at least 1" in error_text(num_generations_eval=0)
 
 
 def test_sampled_token_distillation_requires_reverse_kl() -> None:
@@ -140,9 +146,9 @@ def test_unknown_vllm_mode_is_rejected() -> None:
 
 def test_every_problem_is_reported_at_once() -> None:
     """One startup run should list all mistakes, not just the first one found."""
-    message = error_text(eval_batch_size=0, temperature=0.0, num_generations=1, use_teacher_server=True)
+    message = error_text(eval_batch_size=0, temperature=0.0, num_generations=0, use_teacher_server=True)
 
     assert "eval_batch_size must be at least 1" in message
     assert "temperature must be positive" in message
-    assert "num_generations must be at least 2" in message
+    assert "num_generations must be at least 1" in message
     assert "use_teacher_server requires use_vllm=True" in message

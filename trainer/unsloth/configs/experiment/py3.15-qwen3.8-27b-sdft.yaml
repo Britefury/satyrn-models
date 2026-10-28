@@ -21,13 +21,18 @@ datasets:
 sdft:
   batch_size: 2
   # Rollouts are generated in whole prompt groups (num_generations) spanning whole training batches:
-  # 4 = 2 * batch_size = 2 * num_generations, so steps_per_generation resolves to 2.
+  # 16 = 8 * batch_size = 16 * num_generations, so steps_per_generation resolves to 8.
   generation_batch_size: 16
-  num_generations: 8
+  # The SDFT loss is per-token distillation with no group advantage, so extra completions per prompt
+  # only multiply generation cost.
+  num_generations: 1
+  num_generations_eval: 1
   eval_batch_size: 8
-  eval_steps: 10
+  # Every eval generates rollouts for the whole eval split, so keep evals infrequent.
+  eval_steps: 200
   gradient_accumulation_steps: 1
   num_train_epochs: 1
   learning_rate: 2e-4
   max_prompt_length: 1280
-  max_completion_length: 512
+  # Thinking is enabled, so completions need room to finish reasoning and reach the answer.
+  max_completion_length: 2048

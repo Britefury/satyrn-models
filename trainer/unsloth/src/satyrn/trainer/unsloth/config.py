@@ -300,10 +300,10 @@ class SdftStageConfig(BaseModel):
             value = getattr(self, name)
             require(value is None or value >= 1, f"{name} must be at least 1 when set, got {value}.")
         require(self.num_loss_tokens_to_skip >= 0, "num_loss_tokens_to_skip must not be negative.")
-        require(self.num_generations >= 2, "num_generations must be at least 2: a group needs several completions.")
+        # The distillation loss is per token with no group advantage, so a single completion per prompt is valid.
         require(
-            self.num_generations_eval is None or self.num_generations_eval >= 2,
-            "num_generations_eval must be at least 2 when set, or None to reuse num_generations.",
+            self.num_generations_eval is None or self.num_generations_eval >= 1,
+            "num_generations_eval must be at least 1 when set, or None to reuse num_generations.",
         )
 
         # Generation and evaluation params, sampled by the transformers/vLLM samplers.
