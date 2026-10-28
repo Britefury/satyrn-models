@@ -203,10 +203,12 @@ def main(cfg: DictConfig) -> None:
 
     log_path = Path(HydraConfig.get().runtime.output_dir, "run.log")
     with tee_output(log_path) as log_file:
+        log_config(cfg)
+        # Validate before the expensive unsloth/transformers import so a bad config fails in seconds.
+        config = validate_config(cfg)
+
         unsloth_init()
         load_secrets()
-        log_config(cfg)
-        config = validate_config(cfg)
 
         logger.info("Downloading model %s", config.model.name)
         model, processor = FastVisionModel.from_pretrained(
