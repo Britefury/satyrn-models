@@ -22,15 +22,20 @@ sdft:
   batch_size: 2
   # Rollouts are generated in whole prompt groups (num_generations) spanning whole training batches:
   # 16 = 8 * batch_size = 16 * num_generations, so steps_per_generation resolves to 8.
+  # gradient_accumulation_steps matches steps_per_generation, so each generation feeds exactly one
+  # optimizer step. That keeps training on-policy and makes the trainer skip its rollout log-prob pass,
+  # which would otherwise forward all 16 sequences at once with full-vocab logits and exhaust memory.
   generation_batch_size: 16
   # The SDFT loss is per-token distillation with no group advantage, so extra completions per prompt
   # only multiply generation cost.
   num_generations: 1
   num_generations_eval: 1
-  eval_batch_size: 8
+  # Eval forwards student and teacher over the whole eval batch in one pass, so keep it at batch_size.
+  eval_batch_size: 2
   # Every eval generates rollouts for the whole eval split, so keep evals infrequent.
-  eval_steps: 200
-  gradient_accumulation_steps: 1
+  # Counted in optimizer steps, each of which now covers 16 completions.
+  eval_steps: 25
+  gradient_accumulation_steps: 8
   num_train_epochs: 1
   learning_rate: 2e-4
   max_prompt_length: 1280
