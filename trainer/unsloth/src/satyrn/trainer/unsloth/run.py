@@ -407,7 +407,7 @@ def main(cfg: DictConfig) -> None:
 
                     sdft_train = SDFTTrainer(
                         model=model,
-                        tokenizer=tokenizer,
+                        processing_class=tokenizer,
                         train_dataset=dataset,
                         args=sdft_args,
                     )
