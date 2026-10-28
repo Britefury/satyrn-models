@@ -16,6 +16,16 @@ describe("collectMessages", () => {
     expect(messageContent(messages[0])).toBe("How do I use `Template`?");
   });
 
+  it("attaches the trace to the first assistant message as reasoning", () => {
+    const messages = collectMessages({
+      prompt: [{ role: "user", content: "Q" }],
+      completion: [{ role: "assistant", content: "A" }],
+      trace: "Thinking it through.",
+    });
+
+    expect(messages[1].reasoning_content).toBe("Thinking it through.");
+  });
+
   it("treats a plain string prompt as a single user message", () => {
     const messages = collectMessages({ prompt: "Explain PEP 750." });
 
