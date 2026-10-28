@@ -1,0 +1,32 @@
+# @package _global_
+defaults:
+  - /defaults
+  - /model: qwen3.8-27b
+  - _self_
+
+run_name: py3.15-Qwen3.8-27B-SDFT
+
+mlflow:
+  experiment_name: Qwen3.8-27B
+
+load_in_4bit: false
+
+datasets:
+  sdft:
+    - datasets/python3.14/sft.jsonl
+    - datasets/python3.14/sft-PEP750.jsonl
+    - datasets/python3.15/sft.jsonl
+    - datasets/python3.15/sft2.jsonl
+
+sdft:
+  batch_size: 12
+  # Rollouts are generated in whole prompt groups (num_generations) spanning whole training batches:
+  # 24 = 2 * batch_size = 3 * num_generations, so steps_per_generation resolves to 2.
+  generation_batch_size: 24
+  eval_batch_size: 8
+  eval_steps: 10
+  gradient_accumulation_steps: 1
+  num_train_epochs: 1
+  learning_rate: 2e-4
+  max_prompt_length: 1280
+  max_completion_length: 512

@@ -64,6 +64,12 @@ sft:
   learning_rate: 2e-4
 
 sdft:
+  batch_size: 8
+  # Rollouts are generated in whole groups of num_generations (default 8), so the eval batch holds one group.
+  eval_batch_size: 8
+  eval_steps: 3
+  gradient_accumulation_steps: 1
+  num_train_epochs: 1
   learning_rate: 2e-4
 
 rl:
