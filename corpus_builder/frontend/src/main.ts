@@ -7,7 +7,7 @@ import type { DatasetItem, DatasetResponse, Message, TestCase } from "./types";
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
 /** Keys handled explicitly by the renderer rather than the generic fallback. */
-const KNOWN_KEYS = new Set(["prompt", "completion", "messages", "solution", "test_cases", "metadata", "_viewer"]);
+const KNOWN_KEYS = new Set(["prompt", "completion", "messages", "solution", "test_cases", "metadata", "trace", "_viewer"]);
 
 function codeBlock(code: string, language = "python"): string {
   const highlighted = language === "python" ? highlightPython(code) : escapeHtml(code);
@@ -149,6 +149,14 @@ function renderMessage(message: Message): HTMLElement {
   header.className = "message-header";
   header.textContent = messageRoleLabel(message);
   article.append(header);
+
+  if (typeof message.reasoning_content === "string" && message.reasoning_content) {
+    const thinking = document.createElement("details");
+    thinking.className = "message-thinking";
+    thinking.open = true;
+    thinking.innerHTML = `<summary>Thinking</summary><div class="markdown">${renderMarkdown(message.reasoning_content)}</div>`;
+    article.append(thinking);
+  }
 
   const content = messageContent(message);
   const body = document.createElement("div");

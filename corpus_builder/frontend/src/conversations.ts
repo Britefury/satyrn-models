@@ -33,7 +33,11 @@ export function collectMessages(item: DatasetItem): Message[] {
   if (Array.isArray(item.messages) && item.messages.length > 0 && item.messages.every(isMessage)) {
     return item.messages;
   }
-  return [...toMessages(item.prompt, "user"), ...toMessages(item.completion, "assistant")];
+  const completion = toMessages(item.completion, "assistant");
+  if (typeof item.trace === "string" && item.trace && completion.length > 0) {
+    completion[0] = { ...completion[0], reasoning_content: item.trace };
+  }
+  return [...toMessages(item.prompt, "user"), ...completion];
 }
 
 /** Return a normalized, lower-case role name for a message. */

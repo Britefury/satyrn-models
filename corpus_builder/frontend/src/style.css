@@ -314,6 +314,16 @@ body {
   padding: 0 20px;
 }
 
+.message-thinking {
+  margin: 12px 20px 0;
+  color: var(--text-muted);
+}
+
+.message-thinking summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+
 .message-body.markdown {
   background: transparent;
   border: none;
