@@ -333,6 +333,8 @@ def main(cfg: DictConfig) -> None:
                         config.model.enable_thinking,
                         config.sdft.privileged_context_template,
                     )
+                    split = dataset.train_test_split(test_size=config.eval_ratio, seed=42)
+                    train_dataset, eval_dataset = split["train"], split["test"]
 
                     sdft_args = SDFTConfig(
                         output_dir="outputs/sdft",
@@ -412,7 +414,8 @@ def main(cfg: DictConfig) -> None:
                     sdft_train = SDFTTrainer(
                         model=model,
                         processing_class=tokenizer,
-                        train_dataset=dataset,
+                        train_dataset=train_dataset,
+                        eval_dataset=eval_dataset,
                         args=sdft_args,
                     )
 
