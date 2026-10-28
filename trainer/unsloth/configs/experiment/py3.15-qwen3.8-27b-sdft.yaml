@@ -19,10 +19,11 @@ datasets:
     - datasets/python3.15/sft2.jsonl
 
 sdft:
-  batch_size: 12
+  batch_size: 2
   # Rollouts are generated in whole prompt groups (num_generations) spanning whole training batches:
-  # 24 = 2 * batch_size = 3 * num_generations, so steps_per_generation resolves to 2.
-  generation_batch_size: 24
+  # 4 = 2 * batch_size = 2 * num_generations, so steps_per_generation resolves to 2.
+  generation_batch_size: 4
+  num_generations: 2
   eval_batch_size: 8
   eval_steps: 10
   gradient_accumulation_steps: 1
