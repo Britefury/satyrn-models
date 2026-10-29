@@ -48,6 +48,10 @@ class Tee:
     def isatty(self) -> bool:
         return self.stream.isatty()
 
+    def fileno(self) -> int:
+        # vLLM redirects the stdout file descriptor to silence its distributed init.
+        return self.stream.fileno()
+
 
 @contextmanager
 def tee_output(log_path: Path) -> Iterator[IO[str]]:

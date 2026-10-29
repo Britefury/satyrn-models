@@ -18,6 +18,8 @@ dependencies = [
     "inspect-ai==0.3.260",
     "inspect-evals==0.19.0",
     "agent-client-protocol==0.12.1",
+    # trl 1.7.0 (pinned in uv.toml) supports vLLM 0.14.0 to 0.23.0; newer vLLM also needs torch 2.13.
+    "vllm==0.23.0 ; sys_platform == 'linux'",
 ]
 
 [project.optional-dependencies]
