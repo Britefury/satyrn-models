@@ -51,6 +51,26 @@ def unsloth_init() -> None:
     from trl.trainer.sft_trainer import SFTTrainer
     from trl.experimental.sdft import SDFTConfig, SDFTTrainer
 
+    # Unsloth's generate switches the model to inference mode, which turns gradient checkpointing off, and relies on
+    # its patched unwrap_model_for_generation to switch back afterwards. That patch only reaches trl.trainer, not the
+    # experimental SDFT trainer, so without this the student forward runs without checkpointing and exhausts memory.
+    generate_transformers = SDFTTrainer._generate_transformers
+
+    def generate_transformers_then_restore_training(self, prompt_ids):
+        was_training = self.model.training
+        use_gradient_checkpointing = next(
+            (v for v in (getattr(m, "gradient_checkpointing", False) for m in self.model.modules()) if v),
+            False,
+        )
+        try:
+            return generate_transformers(self, prompt_ids)
+        finally:
+            self.model.for_training(use_gradient_checkpointing=use_gradient_checkpointing)
+            if not was_training:
+                self.model.eval()
+
+    SDFTTrainer._generate_transformers = generate_transformers_then_restore_training
+
     # In notebooks, NotebookProgressCallback logs loss to an IPython handle we cannot capture in the logs
     import transformers.trainer
     from transformers.trainer_callback import ProgressCallback
