@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
@@ -76,6 +77,16 @@ def unsloth_init() -> None:
     from transformers.trainer_callback import ProgressCallback
 
     transformers.trainer.DEFAULT_PROGRESS_CALLBACK = ProgressCallback
+
+
+def enforce_vllm_eager() -> None:
+    """Run TRL's colocated vLLM engine without torch.compile and CUDA graphs."""
+    # TRL has no option to pass enforce_eager through to the colocated engine.
+    import trl.generation.vllm_generation as vllm_generation
+
+    # Without vLLM, TRL never binds LLM and raises its own install hint when the engine is created.
+    if hasattr(vllm_generation, "LLM"):
+        vllm_generation.LLM = functools.partial(vllm_generation.LLM, enforce_eager=True)
 
 
 def load_dataset(paths: str | list[str]) -> Dataset:
@@ -427,6 +438,8 @@ def main(cfg: DictConfig) -> None:
                         steps_per_generation=config.sdft.steps_per_generation,
                     )
 
+                    if config.sdft.use_vllm and config.sdft.vllm_enforce_eager:
+                        enforce_vllm_eager()
                     sdft_train = SDFTTrainer(
                         model=model,
                         processing_class=tokenizer,

@@ -4,10 +4,10 @@ defaults:
   - /model: qwen3.8-27b
   - _self_
 
-run_name: py3.15-Qwen3.8-27B-SDFT
+run_name: py3.15-Qwen3.8-27B-SDFT-TEST
 
 mlflow:
-  experiment_name: Qwen3.8-27B
+  experiment_name: Qwen3.8-27B-TEST
 
 load_in_4bit: false
 
@@ -38,6 +38,12 @@ sdft:
   gradient_accumulation_steps: 8
   num_train_epochs: 1
   learning_rate: 2e-4
-  max_prompt_length: 1280
+  max_prompt_length: 1024
   # Thinking is enabled, so completions need room to finish reasoning and reach the answer.
   max_completion_length: 2048
+  # Enable with sdft.use_vllm=true. The colocated engine holds its own ~51 GiB copy of the weights, so it needs
+  # more than the 0.3 default; capping the length at prompt + completion keeps the KV cache small.
+  use_vllm: false
+  vllm_gpu_memory_utilization: 0.45
+  vllm_max_model_length: 3072
+  vllm_enforce_eager: true
