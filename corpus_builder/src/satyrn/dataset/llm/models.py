@@ -4,6 +4,7 @@ import json
 import logging
 import os
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 import jsonschema
 from dotenv import load_dotenv
@@ -79,6 +80,57 @@ class DeepSeekModel(Model):
         raise SchemaValidationError(
             f"DeepSeek did not return a schema-conforming response after {max_attempts} attempts"
         )
+
+
+@dataclass
+class Completion:
+    """A model's response, with the details needed to judge it."""
+
+    content: str
+    reasoning: str
+    finish_reason: str
+    completion_tokens: int
+
+
+class VllmClient:
+    """A local vLLM server, called directly to keep each response within the model's own distribution.
+
+    Separate from Model: that interface always adds a system prompt, returns no reasoning or
+    finish_reason, and is built around the JSON mode.
+    """
+
+    def __init__(self, model_name: str) -> None:
+        self.model_name = model_name
+        self.base_url = os.environ["VLLM_BASE_URL"].rstrip("/")
+        self.client = OpenAI(api_key="EMPTY", base_url=f"{self.base_url}/v1")
+
+    def complete(self, prompt: str, thinking: bool, max_tokens: int) -> Completion:
+        """Return the model's response to prompt, sent as a single user message."""
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            extra_body={"chat_template_kwargs": {"enable_thinking": thinking}},
+        )
+        choice = response.choices[0]
+        # The field's name depends on the vLLM version; the OpenAI client keeps unknown fields as attributes.
+        reasoning = getattr(choice.message, "reasoning", None) or getattr(choice.message, "reasoning_content", None)
+        return Completion(
+            content=choice.message.content or "",
+            reasoning=reasoning or "",
+            finish_reason=choice.finish_reason,
+            completion_tokens=response.usage.completion_tokens,
+        )
+
+    def count_tokens(self, text: str) -> int:
+        """Return the prompt token count of a user message holding text, via vLLM's /tokenize."""
+        # An absolute URL, because /tokenize is outside the /v1 prefix.
+        response = self.client.post(
+            f"{self.base_url}/tokenize",
+            cast_to=object,
+            body={"model": self.model_name, "messages": [{"role": "user", "content": text}]},
+        )
+        return response["count"]
 
 
 def get_llm(provider: str, model_name: str) -> Model:

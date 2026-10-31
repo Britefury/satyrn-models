@@ -65,3 +65,37 @@ Anything set in the experiment config can be overridden on the same line:
 ```sh
 satyrn-unsloth --config-name experiment/py3.15 model=qwen3-coder-30b-a3b load_in_4bit=true cpt.batch_size=2
 ```
+
+## Self-distillation
+
+Self-distillation runs CPT, rewrites the SFT datasets with the resulting model, then resumes with SFT
+on the rewritten data. Each step is a separate process, so the GPU is free for the next one.
+
+1. Run CPT only, saving a checkpoint:
+
+   ```sh
+   satyrn-unsloth --config-name experiment/py3.15-qwen3.8-27b \
+     save_cpt_checkpoint=true datasets.sft=null datasets.rl=null
+   ```
+
+   This writes two formats to `outputs/<run_name>/cpt`: `adapter/`, for resuming, and `merged/`, a
+   full model for vLLM. The run fails at startup if that directory already exists.
+   `merged/` takes about 2 bytes per parameter, roughly 54 GB for Qwen3.8-27B, and can be deleted
+   after distillation.
+
+2. Serve `merged/` and distill every SFT file the experiment uses. See
+   [Distill SFT datasets](dataset_generator.md#distill-sft-datasets). Stop the server to free the GPU.
+
+3. Resume with SFT on the distilled data:
+
+   ```sh
+   satyrn-unsloth --config-name experiment/py3.15-qwen3.8-27b-distilled
+   ```
+
+The `-distilled` experiments set `resume_adapter`, which continues training the same LoRA adapter,
+matching an in-process CPT → SFT run. `r` and `lora_alpha` must match the config. The stages that
+follow, including RL where the base experiment has it, run as usual.
+
+Compare each distilled run with its vanilla run in MLflow, within a model and with the same CPT
+settings. `humaneval` is the proxy for general ability, which should improve or hold; `python_eval`
+and `eval_qa` cover the target task. Record the share of distilled rows next to each result.

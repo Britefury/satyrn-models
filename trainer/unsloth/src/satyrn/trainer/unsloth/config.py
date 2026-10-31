@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Literal
 
 from omegaconf import DictConfig, OmegaConf
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,23 @@ class ExperimentConfig(BaseModel):
 
     push_to_hub: bool
     push_to_hub_path: str | None
+
+    save_cpt_checkpoint: bool
+    checkpoint_dir: str
+    resume_adapter: str | None
+
+    @model_validator(mode="after")
+    def check_checkpoint_flags(self) -> ExperimentConfig:
+        if self.save_cpt_checkpoint:
+            if self.datasets.cpt is None:
+                raise ValueError("save_cpt_checkpoint requires datasets.cpt")
+            # merged_16bit may not leave the live PEFT model intact, so no stage may train after it.
+            if self.datasets.sft is not None or self.datasets.rl is not None:
+                raise ValueError("save_cpt_checkpoint requires datasets.sft and datasets.rl to be null")
+        # The path is not checked here: checkpoints don't exist in CI, and from_pretrained reports a missing one.
+        if self.resume_adapter is not None and self.datasets.cpt is not None:
+            raise ValueError("resume_adapter requires datasets.cpt to be null")
+        return self
 
 
 class PeftConfig(BaseModel):

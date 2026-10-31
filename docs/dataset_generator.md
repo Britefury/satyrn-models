@@ -145,6 +145,84 @@ Generating examples 24 at a time:
 satyrn-dataset sft -i datasets/python3.15/ideas.jsonl -o datasets/python3.15/sft.jsonl --python-version 3.15 --workers 24
 ```
 
+### Distill SFT datasets
+
+`distill` implements Self-Distillation Fine-Tuning ([Yang et al.](https://arxiv.org/abs/2402.13669)).
+A seed model rewrites each SFT response, given the instruction and the original response as a
+reference. A rewrite that passes the checks below replaces the original; otherwise the original is
+kept. Training on the result stays closer to the model's own distribution than training on the
+originals.
+
+The seed is the model after CPT, because that is the model SFT starts from. The full workflow is in
+[Self-distillation](trainer_unsloth.md#self-distillation).
+
+#### Serve the seed model
+
+vLLM has its own environment in `serving/vllm`, which is Linux-only:
+
+```sh
+cd serving/vllm
+uv sync
+uv run vllm serve ../../outputs/py3.15-Qwen3.8-27B/cpt/merged --served-model-name seed --port 8000 \
+  --reasoning-parser <per model>
+```
+
+Point `distill` at the server root, without `/v1`, using `VLLM_BASE_URL`, which `.env.example` sets
+to `http://localhost:8000`.
+
+#### Usage
+
+Smoke test on the first 20 rows, then read them in the [viewer](#viewing-datasets):
+
+```sh
+satyrn-dataset distill -i datasets/python3.15/sft.jsonl \
+  -o datasets/python3.15/distilled/qwen3.8-27b/sft.jsonl \
+  --thinking --workers 16 --limit 20
+```
+
+Pass `--thinking` for models trained with `enable_thinking: true`. Without it, `trace` is left as
+is. Set `--max-seq-len` to the experiment's `sft.seq_len`; it and `--max-tokens` default to 1280.
+
+Rows are written in input order, so a restart resumes after the last row in the output file, and
+the trainer's seeded split picks the same train and eval rows as the undistilled dataset. Delete the
+output file to start again.
+
+The code comes from locally tuned models, so the command exits at startup if gVisor isn't registered
+with Docker, unless you pass `--allow-unsandboxed`.
+
+#### Checks
+
+The first check that fails keeps the original row, and is recorded in `distill_rejection`:
+
+| Rejection | The rewrite is rejected if |
+| --- | --- |
+| `truncated` | `finish_reason` is not `stop` |
+| `empty` | Its content is empty, or its reasoning is with `--thinking` |
+| `too_long` | Instruction tokens plus completion tokens exceed `--max-seq-len` |
+| `leak` | Its content or reasoning mentions a `reference answer` or `reference response` |
+| `code_blocks` | It doesn't have exactly one ` ```python ` block |
+| `syntax` | The code has a syntax error on the target Python |
+| `runtime` | The code doesn't exit 0 within the timeout on the target Python |
+| `no_new_feature` | The code doesn't exit 1 on the immediately preceding Python |
+| `output_mismatch` | With `--match-expected-output`: its output differs from the original's |
+
+`no_new_feature` is stricter than `sft`, which only requires the output to differ. Rewrites of rows
+that show changed behaviour without failing on the prior version are rejected, as are rewrites of
+rows that deliberately end in an error.
+
+`--max-attempts` resamples a rejected row, with no feedback to the model. It defaults to 1, which
+matches the paper.
+
+The end-of-run report gives the number of distilled rows, the paper's mix ratio, and a count per
+rejection reason. Few distilled rows means the run is mostly vanilla SFT and says little about
+distillation.
+
+#### Output
+
+Rows have the input's schema plus `distilled` and `distill_rejection`. An accepted row replaces
+`completion`, `code` and `expected_output`, and with `--thinking` also `trace`. `expected_output`
+becomes the rewrite's actual output on the target Python.
+
 ### Import NVIDIA OpenCodeReasoning
 
 `opencode-reasoning` streams every config and split from

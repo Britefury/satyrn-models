@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - /experiment/py-mellum2-12b-a2.5
+  - _self_
+
+run_name: py-mellum2-12b-a2.5-distilled
+pre_model_eval: false
+resume_adapter: outputs/py-mellum2-12b-a2.5/cpt/adapter
+
+datasets:
+  cpt: null
+  sft:
+    - datasets/python3.14/distilled/mellum2-12b-a2.5/sft.jsonl
+    - datasets/python3.14/distilled/mellum2-12b-a2.5/sft-PEP750.jsonl
+    - datasets/python3.15/distilled/mellum2-12b-a2.5/sft.jsonl

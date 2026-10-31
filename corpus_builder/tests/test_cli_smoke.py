@@ -7,12 +7,12 @@ from click.testing import CliRunner
 
 from satyrn.dataset.cli import cli
 
-EXPECTED_COMMANDS = ["collect-doc-changes", "cpt", "download-inputs", "ideas", "rl", "sft", "viewer"]
+EXPECTED_COMMANDS = ["collect-doc-changes", "cpt", "distill", "download-inputs", "ideas", "rl", "sft", "viewer"]
 
 
 @pytest.fixture
 def runner() -> Iterator[CliRunner]:
-    """Run from a temporary directory: the sft and rl commands create results/ on startup."""
+    """Run from a temporary directory: the sft, rl and distill commands create results/ on startup."""
     runner = CliRunner()
     with runner.isolated_filesystem():
         yield runner
