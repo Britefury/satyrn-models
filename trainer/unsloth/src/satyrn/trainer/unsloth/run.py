@@ -148,6 +148,38 @@ def upload_to_hub(model: Module, processor: ProcessorMixin, config: ExperimentCo
     model.push_to_hub_gguf(hub_model_id, processor, quantization_method="q4_k_m")
 
 
+def cpt_checkpoint_path(config: ExperimentConfig) -> Path:
+    """Return the directory that holds the run's saved CPT checkpoint."""
+    return Path(config.checkpoint_dir, "cpt")
+
+
+def check_cpt_checkpoint_is_free(config: ExperimentConfig) -> None:
+    """Raise if saving the CPT checkpoint would overwrite an earlier one."""
+    checkpoint = cpt_checkpoint_path(config)
+    if config.save_cpt_checkpoint and checkpoint.exists():
+        raise FileExistsError(f"CPT checkpoint {checkpoint} already exists; move or delete it first")
+
+
+def save_cpt_checkpoint(model: Module, processor: ProcessorMixin, config: ExperimentConfig) -> None:
+    """Save the adapter, for resuming with SFT, and the merged model, for serving with vLLM."""
+    checkpoint = cpt_checkpoint_path(config)
+    logger.info("Saving CPT checkpoint to %s", checkpoint)
+    model.save_pretrained(checkpoint / "adapter")
+    processor.save_pretrained(checkpoint / "adapter")
+    model.save_pretrained_merged(checkpoint / "merged", processor, save_method="merged_16bit")
+
+
+def check_adapter_matches_config(model: Module, config: ExperimentConfig) -> None:
+    """Raise if the resumed adapter differs from the config, whose values are logged to MLflow."""
+    adapter = model.peft_config["default"]
+    peft = config.model.peft
+    if (adapter.r, adapter.lora_alpha) != (peft.r, peft.lora_alpha):
+        raise ValueError(
+            f"Adapter {config.resume_adapter} has r={adapter.r}, lora_alpha={adapter.lora_alpha}; "
+            f"the config has r={peft.r}, lora_alpha={peft.lora_alpha}"
+        )
+
+
 @hydra.main(config_path=CONFIG_DIR)
 def main(cfg: DictConfig) -> None:
     if not cfg:
@@ -160,10 +192,12 @@ def main(cfg: DictConfig) -> None:
         load_secrets()
         log_config(cfg)
         config = validate_config(cfg)
+        check_cpt_checkpoint_is_free(config)
 
         logger.info("Downloading model %s", config.model.name)
+        # Given an adapter directory, this loads the base model named inside it and applies the adapter
         model, processor = FastVisionModel.from_pretrained(
-            model_name=config.model.name,
+            model_name=config.resume_adapter or config.model.name,
             max_seq_length=config.max_seq_length,
             dtype=None,
             load_in_4bit=config.load_in_4bit,
@@ -173,20 +207,25 @@ def main(cfg: DictConfig) -> None:
         # Multimodal models return a Processor; text-only training uses its tokenizer.
         tokenizer = getattr(processor, "tokenizer", processor)
 
-        model = FastModel.get_peft_model(
-            model,
-            r=config.model.peft.r,
-            lora_alpha=config.model.peft.lora_alpha,
-            lora_dropout=config.model.peft.lora_dropout,
-            target_modules=config.model.peft.target_modules,
-            finetune_attention_modules=config.model.peft.finetune_attention_modules,
-            finetune_mlp_modules=config.model.peft.finetune_mlp_modules,
-            finetune_language_layers=config.model.peft.finetune_language_layers,
-            finetune_vision_layers=config.model.peft.finetune_vision_layers,
-            finetune_audio_layers=config.model.peft.finetune_audio_layers,
-            bias="none",
-            use_gradient_checkpointing="unsloth",
-        )
+        if config.resume_adapter:
+            check_adapter_matches_config(model, config)
+            # get_peft_model raises on a model that already has an adapter
+            model = FastModel.for_training(model, use_gradient_checkpointing="unsloth")
+        else:
+            model = FastModel.get_peft_model(
+                model,
+                r=config.model.peft.r,
+                lora_alpha=config.model.peft.lora_alpha,
+                lora_dropout=config.model.peft.lora_dropout,
+                target_modules=config.model.peft.target_modules,
+                finetune_attention_modules=config.model.peft.finetune_attention_modules,
+                finetune_mlp_modules=config.model.peft.finetune_mlp_modules,
+                finetune_language_layers=config.model.peft.finetune_language_layers,
+                finetune_vision_layers=config.model.peft.finetune_vision_layers,
+                finetune_audio_layers=config.model.peft.finetune_audio_layers,
+                bias="none",
+                use_gradient_checkpointing="unsloth",
+            )
         # logger.info("PEFT model %s", model)
         trainable_params, all_params = model.get_nb_trainable_parameters()
         trainable_percentage = 100 * trainable_params / all_params
@@ -205,6 +244,7 @@ def main(cfg: DictConfig) -> None:
                         "torch_version": torch.__version__,
                         "cuda_version": torch.version.cuda,
                         "base_model": config.model.name,
+                        "resume_adapter": config.resume_adapter,
                         "lora_rank": config.model.peft.r,
                         "lora_alpha": config.model.peft.lora_alpha,
                         "lora_dropout": config.model.peft.lora_dropout,
@@ -249,6 +289,10 @@ def main(cfg: DictConfig) -> None:
                     with mlflow.start_run(run_name="cpt", nested=True):
                         log_dataset_params(config.datasets.cpt, trainer)
                         trainer.train()
+
+                    # Save before the evals, so a failed eval cannot lose the weights
+                    if config.save_cpt_checkpoint:
+                        save_cpt_checkpoint(model, processor, config)
 
                     logger.info("Model evaluation after Continuous Pre-Training (CPT)")
                     evaluate_model("cpt", model, tokenizer)

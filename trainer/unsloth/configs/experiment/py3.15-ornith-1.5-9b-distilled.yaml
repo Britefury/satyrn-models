@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - /experiment/py3.15-ornith-1.5-9b
+  - _self_
+
+run_name: py3.15-Ornith-1.5-9B-distilled
+pre_model_eval: false
+resume_adapter: outputs/py3.15-Ornith-1.5-9B/cpt/adapter
+
+datasets:
+  cpt: null
+  sft:
+    - datasets/python3.14/distilled/ornith-1.5-9b/sft.jsonl
+    - datasets/python3.14/distilled/ornith-1.5-9b/sft-PEP750.jsonl
+    - datasets/python3.15/distilled/ornith-1.5-9b/sft.jsonl

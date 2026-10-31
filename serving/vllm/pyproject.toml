@@ -1,0 +1,17 @@
+# Serves seed models for distillation. Kept apart from trainer/ so vLLM's version constraints
+# don't touch the trainer's dependencies. Linux-only; see docs/dataset_generator.md.
+[project]
+name = "satyrn-vllm"
+version = "0.1.0"
+description = "Satyrn vLLM Server"
+requires-python = ">=3.13.9,<3.14"
+dependencies = [
+    "vllm==0.23.0",
+    # qwen3_5 needs >=5.2 and mellum >=5.10.1. Without this pin, the resolver picks 4.57.
+    # 5.17.0 is what britefury/sdft ran vLLM with on Qwen3.8-27B.
+    "transformers==5.17.0",
+]
+
+[tool.uv]
+package = false
+environments = ["sys_platform == 'linux'"]

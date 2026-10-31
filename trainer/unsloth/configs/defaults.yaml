@@ -8,6 +8,9 @@ max_steps: -1 # positive values cut a run short, overriding num_train_epochs
 pre_model_eval: true # run the full eval suite on the untrained model before any stage
 push_to_hub: false # upload the trained model to Hugging Face
 push_to_hub_path: null # repo id; defaults to $HF_USERNAME/<base model name>
+save_cpt_checkpoint: false # save the adapter and merged model after CPT
+checkpoint_dir: outputs/${run_name}
+resume_adapter: null # path to a saved adapter; continues training it instead of adding a new one
 
 model:
 

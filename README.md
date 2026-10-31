@@ -14,6 +14,7 @@ Models go through three training stages, building on one another:
 
 - `corpus_builder/` - dataset generation (`satyrn-dataset` CLI)
 - `trainer/unsloth/` - model fine-tuning (`satyrn-unsloth` CLI)
+- `serving/vllm/` - vLLM environment for serving seed models
 - `spikes/` - experiments which are not part of the main pipeline
 - `datasets/`, `results/` - generated artifacts
 

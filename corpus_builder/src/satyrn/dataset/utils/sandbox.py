@@ -4,6 +4,7 @@ import logging
 import shutil
 import subprocess
 import urllib.request
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from uuid import uuid4
@@ -98,6 +99,15 @@ def build_sandbox_image(python_version: str) -> str:
     return image
 
 
+@dataclass
+class RunResult:
+    """The outcome of running code in a sandbox. exit_code is None if the run timed out."""
+
+    output: str
+    exit_code: int | None
+    timed_out: bool
+
+
 def remove_leftover_containers() -> int:
     """Remove containers this sandbox process left running. Return how many were removed."""
     listing = subprocess.run(
@@ -126,6 +136,10 @@ class Sandbox:
 
     def run(self, code: str) -> str:
         """Run code in the container. Return its combined output."""
+        return self.execute(code).output
+
+    def execute(self, code: str) -> RunResult:
+        """Run code in the container. Return its combined output and how it ended."""
         command = [
             "docker",
             "run",
@@ -160,5 +174,5 @@ class Sandbox:
                 command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=TIMEOUT_SECONDS
             )
         except subprocess.TimeoutExpired:
-            return f"[did not terminate within {TIMEOUT_SECONDS} seconds]"
-        return truncate(result.stdout)
+            return RunResult(f"[did not terminate within {TIMEOUT_SECONDS} seconds]", exit_code=None, timed_out=True)
+        return RunResult(truncate(result.stdout), exit_code=result.returncode, timed_out=False)
