@@ -15,7 +15,7 @@ from satyrn.dataset.llm.context import Context
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpx2").setLevel(logging.WARNING)
 
 
 class SchemaValidationError(Exception):
