@@ -241,15 +241,21 @@ def main(
     settings = DistillSettings(thinking, max_tokens, max_seq_len, max_attempts, match_expected_output)
 
     executor = ThreadPoolExecutor(max_workers=workers)
+    progress = tqdm(total=len(rows), desc="Rows")
     try:
-        # map, not as_completed: rows stay in input order, so the trainer's seeded split picks the same
-        # train and eval rows as the undistilled baseline, and a restart can skip by count.
         distill = partial(distill_row, client=client, sandboxes=sandboxes, settings=settings)
-        for dataset_line in tqdm(executor.map(distill, rows), total=len(rows), desc="Rows"):
-            append_dataset_line(dataset_line, output_path)
+        futures = [executor.submit(distill, row) for row in rows]
+        # Counts rows as they finish: a slow row would otherwise hide the finished rows queued behind it.
+        for future in futures:
+            future.add_done_callback(lambda _: progress.update())
+        # Not as_completed: rows stay in input order, so the trainer's seeded split picks the same
+        # train and eval rows as the undistilled baseline, and a restart can skip by count.
+        for future in futures:
+            append_dataset_line(future.result(), output_path)
     finally:
         # A server failure stops the run here, rather than marking the remaining rows as rejected.
         executor.shutdown(wait=True, cancel_futures=True)
+        progress.close()
         logger.info("Cleaning up sandbox containers...")
         removed_count = remove_leftover_containers()
         logger.info("Removed %d leftover sandbox containers", removed_count)
