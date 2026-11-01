@@ -163,9 +163,28 @@ vLLM has its own environment in `serving/vllm`, which is Linux-only:
 ```sh
 cd serving/vllm
 uv sync
-uv run vllm serve ../../outputs/py3.15-Qwen3.8-27B/cpt/merged --served-model-name seed --port 8000 \
-  --reasoning-parser <per model>
+uv run vllm serve <model> --served-model-name seed --port 8000 \
+  --reasoning-parser qwen3 --enforce-eager
 ```
+
+`<model>` is a local checkpoint or a HuggingFace repo ID:
+
+| Model | After CPT | Unmodified |
+| --- | --- | --- |
+| Qwen3.8-27B | `../../outputs/py3.15-Qwen3.8-27B/cpt/merged` | `unsloth/Qwen3.8-27B` |
+| Ornith-1.5-9B | `../../outputs/py3.15-Ornith-1.5-9B/cpt/merged` | `ornith-ai/Ornith-1.5-9B` |
+
+A repo ID downloads to the HuggingFace cache on first use, and reuses anything `hf download` already
+fetched. An unmodified model is useful for testing the pipeline, but its rewrites don't match an SFT
+run that starts from CPT, so don't write them to the `distilled/` paths the `-distilled` experiments
+read.
+
+Both models use the `qwen3_5` architecture. `--enforce-eager` is needed because vLLM 0.23 fails to
+compile its linear attention, with `Tried to erase Node size but it still had 2 users`.
+`--reasoning-parser qwen3` puts the reasoning in a separate field, which `--thinking` needs: without
+it, every row is rejected as `empty`.
+
+`--served-model-name seed` matches the default of `distill --model`.
 
 Point `distill` at the server root, without `/v1`, using `VLLM_BASE_URL`, which `.env.example` sets
 to `http://localhost:8000`.
