@@ -28,6 +28,9 @@ SHUTDOWN_TIMEOUT_SECONDS=120
 # Holds the reference answer plus the response. The longest row is about 10k characters. A request
 # over this limit fails, which stops distill. Capping it keeps the KV cache small.
 MAX_MODEL_LEN=8192
+# vLLM's default of 1024 needs more Mamba cache blocks than Qwen3.8-27B leaves on one GPU (678), so
+# it fails to start. Keep this at or above the worker count, or requests queue.
+MAX_NUM_SEQS=64
 LOG_DIR=outputs/distill-logs
 
 # Written apart from distilled/, which holds rewrites by the model after CPT. The -distilled
@@ -63,7 +66,7 @@ start_server() {
     # In its own process group, so stop_server also reaches uv's child and vLLM's engine process.
     setsid uv run --directory serving/vllm vllm serve "$repo" \
         --served-model-name seed --port "$PORT" --max-model-len "$MAX_MODEL_LEN" \
-        --reasoning-parser qwen3 \
+        --max-num-seqs "$MAX_NUM_SEQS" --reasoning-parser qwen3 \
         >"$log_path" 2>&1 &
     SERVER_PID=$!
 

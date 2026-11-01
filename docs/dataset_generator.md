@@ -164,7 +164,7 @@ vLLM has its own environment in `serving/vllm`, which is Linux-only:
 cd serving/vllm
 uv sync
 uv run vllm serve <model> --served-model-name seed --port 8000 \
-  --reasoning-parser qwen3
+  --max-num-seqs 64 --reasoning-parser qwen3
 ```
 
 `<model>` is a local checkpoint or a HuggingFace repo ID:
@@ -179,8 +179,13 @@ fetched. An unmodified model is useful for testing the pipeline, but its rewrite
 run that starts from CPT, so don't write them to the `distilled/` paths the `-distilled` experiments
 read.
 
-Both models use the `qwen3_5` architecture. `--reasoning-parser qwen3` puts the reasoning in a separate field, which `--thinking` needs: without
-it, every row is rejected as `empty`.
+Both models use the `qwen3_5` architecture. `--reasoning-parser qwen3` puts the reasoning in a
+separate field, which `--thinking` needs: without it, every row is rejected as `empty`.
+
+`--max-num-seqs 64` is needed because vLLM's default of 1024 exceeds the Mamba cache blocks that
+Qwen3.8-27B leaves on one 96 GB GPU, which stops the server at startup with
+`max_num_seqs (1024) exceeds available Mamba cache blocks`. Keep it at or above `distill --workers`,
+or requests queue.
 
 `--served-model-name seed` matches the default of `distill --model`.
 
