@@ -63,7 +63,7 @@ start_server() {
     # In its own process group, so stop_server also reaches uv's child and vLLM's engine process.
     setsid uv run --directory serving/vllm vllm serve "$repo" \
         --served-model-name seed --port "$PORT" --max-model-len "$MAX_MODEL_LEN" \
-        --reasoning-parser qwen3 --enforce-eager \
+        --reasoning-parser qwen3 \
         >"$log_path" 2>&1 &
     SERVER_PID=$!
 

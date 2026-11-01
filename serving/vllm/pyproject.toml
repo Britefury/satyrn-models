@@ -6,7 +6,7 @@ version = "0.1.0"
 description = "Satyrn vLLM Server"
 requires-python = ">=3.13.9,<3.14"
 dependencies = [
-    "vllm==0.23.0",
+    "vllm==0.32.0",
     # qwen3_5 needs >=5.2 and mellum >=5.10.1. Without this pin, the resolver picks 4.57.
     # 5.17.0 is what britefury/sdft ran vLLM with on Qwen3.8-27B.
     "transformers==5.17.0",
@@ -14,4 +14,4 @@ dependencies = [
 
 [tool.uv]
 package = false
-environments = ["sys_platform == 'linux'"]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]

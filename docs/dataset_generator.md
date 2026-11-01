@@ -164,7 +164,7 @@ vLLM has its own environment in `serving/vllm`, which is Linux-only:
 cd serving/vllm
 uv sync
 uv run vllm serve <model> --served-model-name seed --port 8000 \
-  --reasoning-parser qwen3 --enforce-eager
+  --reasoning-parser qwen3
 ```
 
 `<model>` is a local checkpoint or a HuggingFace repo ID:
@@ -179,9 +179,7 @@ fetched. An unmodified model is useful for testing the pipeline, but its rewrite
 run that starts from CPT, so don't write them to the `distilled/` paths the `-distilled` experiments
 read.
 
-Both models use the `qwen3_5` architecture. `--enforce-eager` is needed because vLLM 0.23 fails to
-compile its linear attention, with `Tried to erase Node size but it still had 2 users`.
-`--reasoning-parser qwen3` puts the reasoning in a separate field, which `--thinking` needs: without
+Both models use the `qwen3_5` architecture. `--reasoning-parser qwen3` puts the reasoning in a separate field, which `--thinking` needs: without
 it, every row is rejected as `empty`.
 
 `--served-model-name seed` matches the default of `distill --model`.
