@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Distills every SFT dataset with the unmodified Qwen3.8-27B and Ornith-1.5-9B models, serving one
-# model at a time. See docs/dataset_generator.md. Linux-only, because vLLM is.
+# Distills every SFT dataset with Qwen3.8-27B and Ornith-1.5-9B, both unmodified and after CPT,
+# serving one model at a time. See docs/dataset_generator.md. Linux-only, because vLLM is.
 #
 # Usage: bash run_distill.sh [workers]
 #
@@ -31,15 +31,19 @@ MAX_MODEL_LEN=8192
 # vLLM's default of 1024 needs more Mamba cache blocks than Qwen3.8-27B leaves on one GPU (678), so
 # it fails to start. Keep this at or above the worker count, or requests queue.
 MAX_NUM_SEQS=64
+# Limits thinking plus the response, and also the instruction plus both. Keep it equal to sft.seq_len
+# in the -distilled experiments, or the trainer cuts off rows that passed.
+MAX_LEN=4096
 LOG_DIR=outputs/distill-logs
 
-# Written apart from distilled/, which holds rewrites by the model after CPT. The -distilled
-# experiments read that directory, and these rewrites don't match an SFT run resuming from CPT.
-OUTPUT_DIR_NAME=distilled-unmodified
-
+# distilled/ holds rewrites by the model after CPT, which the -distilled experiments read. Rewrites
+# by the unmodified models don't match an SFT run resuming from CPT, so they're kept apart.
+# Local paths are relative to serving/vllm, where vLLM runs.
 MODELS=(
-    "qwen3.8-27b unsloth/Qwen3.8-27B"
-    "ornith-1.5-9b ornith-ai/Ornith-1.5-9B"
+    "qwen3.8-27b unsloth/Qwen3.8-27B distilled-unmodified"
+    "qwen3.8-27b ../../outputs/py3.15-Qwen3.8-27B/cpt/merged distilled"
+    "ornith-1.5-9b ornith-ai/Ornith-1.5-9B distilled-unmodified"
+    "ornith-1.5-9b ../../outputs/py3.15-Ornith-1.5-9B/cpt/merged distilled"
 )
 DATASETS=(
     python3.14/sft
@@ -105,16 +109,17 @@ stop_server() {
 }
 
 distill_model() {
-    local name=$1 repo=$2 dataset
+    local name=$1 repo=$2 output_dir=$3 dataset
 
-    start_server "$repo" "${LOG_DIR}/vllm-${name}.log" || return 1
+    start_server "$repo" "${LOG_DIR}/vllm-${output_dir}-${name}.log" || return 1
 
     for dataset in "${DATASETS[@]}"; do
-        echo "=== ${name}: ${dataset}"
+        echo "=== ${output_dir}/${name}: ${dataset}"
         uv run --project corpus_builder satyrn-dataset distill \
             -i "datasets/${dataset}.jsonl" \
-            -o "datasets/${dataset%%/*}/${OUTPUT_DIR_NAME}/${name}/${dataset##*/}.jsonl" \
-            --thinking --workers "$WORKERS" --max-attempts "$MAX_ATTEMPTS" || return 1
+            -o "datasets/${dataset%%/*}/${output_dir}/${name}/${dataset##*/}.jsonl" \
+            --thinking --max-tokens "$MAX_LEN" --max-seq-len "$MAX_LEN" \
+            --workers "$WORKERS" --max-attempts "$MAX_ATTEMPTS" || return 1
     done
 }
 
@@ -127,9 +132,9 @@ mkdir -p "$LOG_DIR"
 
 failed=()
 for model in "${MODELS[@]}"; do
-    read -r name repo <<<"$model"
+    read -r name repo output_dir <<<"$model"
     echo "=== Serving ${repo}"
-    distill_model "$name" "$repo" || failed+=("$name")
+    distill_model "$name" "$repo" "$output_dir" || failed+=("${output_dir}/${name}")
     stop_server
 done
 
