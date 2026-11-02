@@ -199,23 +199,30 @@ Smoke test on the first 20 rows, then read them in the [viewer](#viewing-dataset
 ```sh
 satyrn-dataset distill -i datasets/python3.15/sft.jsonl \
   -o datasets/python3.15/distilled/qwen3.8-27b/sft.jsonl \
-  --thinking --workers 16 --limit 20
+  --distill-mode rephrase --workers 16 --limit 20
 ```
 
-Pass `--thinking` for models trained with `enable_thinking: true`. Without it, `trace` is left as
-is. Set `--max-seq-len` to the experiment's `sft.seq_len`; it and `--max-tokens` default to 1280.
+`--thinking` asks the model to think, and replaces `trace` with its reasoning. Without it, `trace` is
+left as is, except with `--distill-mode rephrase`. Set `--max-seq-len` to the experiment's `sft.seq_len`; it and `--max-tokens` default to 1280.
 
 `--distill-mode` chooses what the model sees:
 
 | Mode | Prompt | Use with |
 | --- | --- | --- |
-| `full` (default) | The paper's prompt: the instruction and the original response | Models without `--thinking` |
-| `no_reference` | The instruction alone | Models with `--thinking`, after CPT |
+| `full` (default) | The paper's prompt: the instruction and the original response | Rewriting the response alone |
+| `rephrase` | The instruction, original trace and original response, asking for both to be rephrased under the same section titles | Datasets trained with `enable_thinking: true` |
+| `no_reference` | The instruction alone | Models that already know the new features |
 
-With `--thinking`, `full` rejects nearly every rewrite as `leak`. The model quotes the prompt back in
-its reasoning, and rewording the prompt or forbidding the mention doesn't stop it. `no_reference` has
-no reference to quote, but departs from the paper's Eq. 3, and an unmodified model is unlikely to
-know the new features, so most of its rewrites will fail `runtime` or `no_new_feature`.
+`rephrase` is the mode for models trained with thinking, and departs from the paper by applying the
+rewrite to the trace. It can't be combined with `--thinking`: the trace is written as ordinary output,
+and the instruction is left as it is.
+
+Avoid thinking with a prompt that holds the original. With `--thinking`, `full` rejects nearly every
+rewrite as `leak`, because the model quotes the prompt back in its reasoning, and rewording the prompt
+or forbidding the mention doesn't stop it. Without `--thinking`, `full` works but keeps the original
+trace, which then describes the old code. `no_reference` has nothing to quote, but the model has to
+recall the features unaided: both unmodified and CPT models spent their tokens trying and were rejected
+as `truncated`.
 
 Don't change the mode when resuming, or the output file will mix rewrites from both.
 
@@ -233,7 +240,8 @@ The first check that fails keeps the original row, and is recorded in `distill_r
 | Rejection | The rewrite is rejected if |
 | --- | --- |
 | `truncated` | `finish_reason` is not `stop` |
-| `empty` | Its content is empty, or its reasoning is with `--thinking` |
+| `sections` | With `rephrase`: the output isn't the `### Reasoning:` and `### Response:` sections |
+| `empty` | Its content is empty, or its reasoning is with `--thinking` or `rephrase` |
 | `too_long` | Instruction tokens plus completion tokens exceed `--max-seq-len` |
 | `leak` | Its content or reasoning mentions a `reference answer` or `reference response` |
 | `code_blocks` | It doesn't have exactly one ` ```python ` block |
@@ -253,10 +261,14 @@ The end-of-run report gives the number of distilled rows, the paper's mix ratio,
 rejection reason. Few distilled rows means the run is mostly vanilla SFT and says little about
 distillation.
 
+The same counts appear on one line under the progress bar and update as each row finishes, so a
+poor run shows early. They include rows from earlier runs when resuming. The line is trimmed to the
+terminal's width, so rare rejection reasons at its end may be hidden on a narrow terminal.
+
 #### Output
 
 Rows have the input's schema plus `distilled` and `distill_rejection`. An accepted row replaces
-`completion`, `code` and `expected_output`, and with `--thinking` also `trace`. `expected_output`
+`completion`, `code` and `expected_output`, and with `--thinking` or `rephrase` also `trace`. `expected_output`
 becomes the rewrite's actual output on the target Python.
 
 ### Import NVIDIA OpenCodeReasoning

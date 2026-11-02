@@ -3,7 +3,9 @@
 import json
 import subprocess
 import time
+from collections import Counter
 from collections.abc import Callable
+from concurrent.futures import Future
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -15,6 +17,7 @@ from satyrn.dataset import distill
 from satyrn.dataset.distill import (
     DistillMode,
     DistillSettings,
+    LiveReport,
     build_prompt,
     count_written_rows,
     distill_row,
@@ -132,7 +135,7 @@ def test_no_reference_prompt_is_the_instruction_alone() -> None:
     assert build_prompt(make_row(), "no_reference") == "How do I do it?"
 
 
-@pytest.mark.parametrize("mode", ["full", "no_reference"])
+@pytest.mark.parametrize("mode", ["full", "no_reference", "rephrase"])
 def test_prompt_handles_braces_in_the_row(mode: DistillMode) -> None:
     row = make_row()
     row["prompt"][0]["content"] = "Why {does} this {0} fail?"
@@ -150,6 +153,69 @@ def test_accepted_row_replaces_its_fields_together() -> None:
     assert row["distilled"] is True
     assert row["distill_rejection"] is None
     assert row["idea"] == "An idea"
+
+
+def test_rephrase_prompt_shows_the_trace_and_the_response() -> None:
+    prompt = build_prompt(make_row(), "rephrase")
+
+    assert "### Instruction:\nHow do I do it?\n" in prompt
+    assert "### Reasoning:\nThe old trace.\n" in prompt
+    assert prompt.endswith("### Response:\nLike this.\n\n```python\nprint('old')\n```")
+    assert "EXACTLY" in prompt
+
+
+def sections(reasoning: str = GOOD_REASONING, response: str = GOOD_CONTENT) -> Completion:
+    return make_completion(content=f"### Reasoning:\n{reasoning}\n### Response:\n{response}", reasoning="")
+
+
+def test_rephrase_splits_the_output_into_trace_and_response() -> None:
+    client = FakeClient(sections(reasoning="I think it through.\n\nThen I print it."))
+
+    row = run_row(client=client, mode="rephrase", thinking=False)
+
+    assert row["distilled"] is True
+    assert row["trace"] == "I think it through.\n\nThen I print it."
+    assert row["completion"] == [{"role": "assistant", "content": GOOD_CONTENT}]
+    assert row["code"] == GOOD_CODE
+
+
+def test_rephrase_turns_thinking_off_on_the_request() -> None:
+    calls: list[bool] = []
+    client = FakeClient(sections())
+    complete = client.complete
+
+    def spy(prompt: str, thinking: bool, max_tokens: int) -> Completion:
+        calls.append(thinking)
+        return complete(prompt, thinking, max_tokens)
+
+    client.complete = spy  # type: ignore[method-assign]
+    run_row(client=client, mode="rephrase", thinking=False)
+
+    assert calls == [False]
+
+
+@pytest.mark.parametrize(
+    ("completion", "reason"),
+    [
+        (make_completion(content=GOOD_CONTENT, reasoning=""), "sections"),
+        (make_completion(content=f"Sure!\n### Reasoning:\nA\n### Response:\n{GOOD_CONTENT}"), "sections"),
+        (make_completion(content=f"### Response:\n{GOOD_CONTENT}"), "sections"),
+        (sections(reasoning="  "), "empty"),
+        (sections(reasoning="The reference answer says so."), "leak"),
+        (sections(response="No code at all."), "code_blocks"),
+    ],
+)
+def test_rephrase_rejections(completion: Completion, reason: str) -> None:
+    row = run_row(client=FakeClient(completion), mode="rephrase", thinking=False)
+
+    assert row == {**make_row(), "distilled": False, "distill_rejection": reason}
+
+
+def test_rephrase_with_thinking_is_refused(invoke: Any) -> None:
+    result, written = invoke([make_row()], "--distill-mode", "rephrase")
+
+    assert result.exit_code == 2
+    assert written == []
 
 
 def test_trace_is_left_as_is_without_thinking() -> None:
@@ -454,6 +520,53 @@ def test_report_includes_a_resumed_run(invoke: Any, caplog: pytest.LogCaptureFix
         invoke(rows)
 
     assert "Distilled 3 of 3 rows" in caplog.text
+
+
+def finished(rejection: str | None) -> Future:
+    future: Future = Future()
+    future.set_result({"distill_rejection": rejection})
+    return future
+
+
+def test_live_report_shows_the_counts_after_each_row() -> None:
+    report = LiveReport(Counter())
+
+    report.record(finished(None))
+    assert report.display.desc == "Distilled 1 of 1 rows | Kept the original for 0 rows"
+
+    report.record(finished("leak"))
+    report.record(finished("leak"))
+    report.record(finished("syntax"))
+    assert report.display.desc == "Distilled 1 of 4 rows | Kept the original for 3 rows | leak: 2 | syntax: 1"
+
+
+def test_live_report_skips_rows_without_an_outcome() -> None:
+    report = LiveReport(Counter())
+    cancelled: Future = Future()
+    cancelled.cancel()
+    failed: Future = Future()
+    failed.set_exception(RuntimeError("server down"))
+
+    report.record(cancelled)
+    report.record(failed)
+
+    assert report.outcomes.total() == 0
+
+
+def test_live_report_is_updated_as_the_command_runs(invoke: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    reports: list[LiveReport] = []
+
+    class SpiedReport(LiveReport):
+        def __init__(self, outcomes: Counter) -> None:
+            super().__init__(outcomes)
+            reports.append(self)
+
+    monkeypatch.setattr(distill, "LiveReport", SpiedReport)
+    rows = [make_row(index) for index in range(3)]
+    invoke(rows, "--limit", "2")
+    invoke(rows)
+
+    assert [report.outcomes for report in reports] == [Counter({None: 2}), Counter({None: 3})]
 
 
 def stub_response(message: SimpleNamespace, finish_reason: str = "stop") -> SimpleNamespace:

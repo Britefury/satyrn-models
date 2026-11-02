@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Distills every SFT dataset with Qwen3.8-27B and Ornith-1.5-9B after CPT, serving one model at a
-# time. See docs/dataset_generator.md. Linux-only, because vLLM is.
+# Distills every SFT dataset with Qwen3.8-27B and Ornith-1.5-9B, both unmodified and after CPT,
+# serving one model at a time. See docs/dataset_generator.md. Linux-only, because vLLM is.
 #
 # Usage: bash run_distill.sh [workers]
 #
@@ -36,8 +36,8 @@ MAX_NUM_SEQS=64
 MAX_LEN=4096
 LOG_DIR=outputs/distill-logs
 
-# distilled/ holds rewrites by the model after CPT, which the -distilled experiments read. There are
-# no unmodified models here: no_reference rewrites need the new features that CPT teaches.
+# distilled/ holds rewrites by the model after CPT, which the -distilled experiments read. Rewrites
+# by the unmodified models don't match an SFT run resuming from CPT, so they're kept apart.
 # Local paths are relative to serving/vllm, where vLLM runs.
 MODELS=(
     "qwen3.8-27b ../../outputs/py3.15-Qwen3.8-27B/cpt/merged distilled"
@@ -116,7 +116,7 @@ distill_model() {
         uv run --project corpus_builder satyrn-dataset distill \
             -i "datasets/${dataset}.jsonl" \
             -o "datasets/${dataset%%/*}/${output_dir}/${name}/${dataset##*/}.jsonl" \
-            --distill-mode no_reference --thinking --max-tokens "$MAX_LEN" --max-seq-len "$MAX_LEN" \
+            --distill-mode rephrase --max-tokens "$MAX_LEN" --max-seq-len "$MAX_LEN" \
             --workers "$WORKERS" --max-attempts "$MAX_ATTEMPTS" || return 1
     done
 }

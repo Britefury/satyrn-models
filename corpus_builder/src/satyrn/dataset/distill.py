@@ -3,16 +3,18 @@
 The seed model rewrites each response given the instruction and the original (Eq. 3). A rewrite that
 passes the checks replaces the original; otherwise the original is kept (Eq. 4).
 
-The no_reference mode departs from the paper, by giving the model only the instruction.
+The no_reference mode departs from the paper, by giving the model only the instruction. The rephrase
+mode also departs from it, by having the model rewrite the original trace along with the response.
 """
 
 import logging
 import re
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
+from threading import Lock
 from typing import Literal, get_args
 
 import click
@@ -30,7 +32,7 @@ from satyrn.dataset.utils.sandbox import (
 
 logger = logging.getLogger(__name__)
 
-DistillMode = Literal["full", "no_reference"]
+DistillMode = Literal["full", "no_reference", "rephrase"]
 
 # The paper's Fig. 3, verbatim.
 PROMPT_TEMPLATE = """Below are an instruction that describes a task along with a reference answer. \
@@ -41,7 +43,20 @@ Using the reference answer as a guide, write your own response.
 {original_response}
 ### Response:"""
 
+# The reasoning is requested as ordinary output with thinking off, because a model thinking about a
+# prompt holding the original quotes it back, and that would end up in the trace.
+REPHRASE_PROMPT_TEMPLATE = """Below are an instruction that describes a task, followed by a reasoning and a \
+response for it. Output the ### Reasoning: and ### Response: sections, retaining their section titles EXACTLY \
+but re-phrasing their contents in your own words. Do not repeat the instruction.
+### Instruction:
+{instruction}
+### Reasoning:
+{original_trace}
+### Response:
+{original_response}"""
+
 LEAK_PATTERN = re.compile(r"reference (?:answer|response)", re.IGNORECASE)
+SECTIONS_PATTERN = re.compile(r"### Reasoning:[ \t]*\n(.*?)\n### Response:[ \t]*\n(.*)", re.DOTALL)
 PYTHON_BLOCK_PATTERN = re.compile(r"^```python[ \t]*\n(.*?)\n```[ \t]*$", re.DOTALL | re.MULTILINE)
 
 
@@ -54,6 +69,10 @@ class DistillSettings:
     max_attempts: int
     match_expected_output: bool
 
+    @property
+    def replaces_trace(self) -> bool:
+        return self.thinking or self.mode == "rephrase"
+
 
 @dataclass
 class Rewrite:
@@ -65,12 +84,17 @@ class Rewrite:
 
 
 def build_prompt(row: dict, mode: DistillMode) -> str:
-    """Return the rewrite prompt for row. The original trace is left out, so the model reasons for itself."""
+    """Return the rewrite prompt for row. Only rephrase shows the original trace."""
     instruction = row["prompt"][-1]["content"]
+    response = row["completion"][0]["content"]
+    if mode == "rephrase":
+        return REPHRASE_PROMPT_TEMPLATE.format(
+            instruction=instruction, original_trace=row["trace"], original_response=response
+        )
     # With thinking on, the model quotes a reference answer back in its reasoning, whatever the prompt calls it.
     if mode == "no_reference":
         return instruction
-    return PROMPT_TEMPLATE.format(instruction=instruction, original_response=row["completion"][0]["content"])
+    return PROMPT_TEMPLATE.format(instruction=instruction, original_response=response)
 
 
 def check_syntax(code: str, sandbox: Sandbox) -> bool:
@@ -90,9 +114,15 @@ def check_completion(
     if completion.finish_reason != "stop":
         return "truncated"
 
+    if settings.mode == "rephrase":
+        sections = SECTIONS_PATTERN.fullmatch(completion.content.strip())
+        if sections is None:
+            return "sections"
+        completion = replace(completion, reasoning=sections[1], content=sections[2])
+
     content = completion.content.strip()
     reasoning = completion.reasoning.strip()
-    if not content or (settings.thinking and not reasoning):
+    if not content or (settings.replaces_trace and not reasoning):
         return "empty"
 
     # sft.seq_len limits the whole rendered row, so max_tokens alone doesn't guarantee a fit.
@@ -147,7 +177,7 @@ def distill_row(row: dict, client: VllmClient, sandboxes: dict[str, tuple], sett
             "distilled": True,
             "distill_rejection": None,
         }
-        if settings.thinking:
+        if settings.replaces_trace:
             # The trainer uses trace as reasoning_content, so a stale trace would describe the old code.
             distilled_row["trace"] = outcome.completion.reasoning.strip()
         return distilled_row
@@ -162,18 +192,50 @@ def count_written_rows(output_path: Path) -> int:
     return sum(1 for _ in read_jsonl_file(output_path))
 
 
+def count_outcomes(output_path: Path) -> Counter:
+    """Return the rows in the output file by rejection reason, with distilled rows under None."""
+    if not output_path.exists():
+        return Counter()
+    return Counter(row["distill_rejection"] for row in read_jsonl_file(output_path))
+
+
+def report_lines(outcomes: Counter) -> list[str]:
+    """Return the report on outcomes, as counted by count_outcomes."""
+    total = outcomes.total()
+    distilled = outcomes[None]
+    rejections = [(reason, count) for reason, count in outcomes.most_common() if reason is not None]
+
+    lines = [f"Distilled {distilled} of {total} rows", f"Kept the original for {total - distilled} rows"]
+    lines += [f"  {reason}: {count}" for reason, count in rejections]
+    return lines
+
+
 def summarize(output_path: Path) -> str:
     """Return the run's report, counted from the output file so resumed runs are included."""
-    rows = list(read_jsonl_file(output_path))
-    distilled = sum(row["distilled"] for row in rows)
-    rejections = Counter(row["distill_rejection"] for row in rows if not row["distilled"])
+    return "\n".join(report_lines(count_outcomes(output_path)))
 
-    lines = [
-        f"Distilled {distilled} of {len(rows)} rows",
-        f"Kept the original for {len(rows) - distilled} rows",
-    ]
-    lines += [f"  {reason}: {count}" for reason, count in rejections.most_common()]
-    return "\n".join(lines)
+
+class LiveReport:
+    """Show the report as one line under the progress bar, updated each time a row finishes."""
+
+    def __init__(self, outcomes: Counter) -> None:
+        self.outcomes = outcomes
+        self.lock = Lock()
+        # dynamic_ncols trims the line to the terminal, because a wrapped line would break the redraw.
+        self.display = tqdm(bar_format="{desc}", position=1, dynamic_ncols=True, leave=False)
+        self.show()
+
+    def show(self) -> None:
+        self.display.set_description_str(" | ".join(line.strip() for line in report_lines(self.outcomes)))
+
+    def record(self, future: Future) -> None:
+        """Count a finished row. A cancelled or failed row has no outcome, and is never written."""
+        if future.cancelled() or future.exception() is not None:
+            return
+        # Workers finish concurrently, and this runs on the worker's thread.
+        with self.lock:
+            self.outcomes[future.result()["distill_rejection"]] += 1
+            self.show()
 
 
 @click.command("distill")
@@ -199,7 +261,10 @@ def summarize(output_path: Path) -> str:
     type=click.Choice(get_args(DistillMode)),
     default="full",
     show_default=True,
-    help="full shows the model the original response, as in the paper. no_reference shows only the instruction.",
+    help=(
+        "full shows the model the original response, as in the paper. no_reference shows only the instruction. "
+        "rephrase also shows the original trace and has the model rewrite it, and can't be used with --thinking."
+    ),
 )
 @click.option("--thinking", is_flag=True, default=False, help="Enable thinking and replace each row's trace.")
 @click.option("--max-tokens", type=click.IntRange(min=1), default=1280, show_default=True, help="Response limit.")
@@ -234,6 +299,8 @@ def main(
     """Rewrite an SFT dataset with the seed model, keeping the original where a rewrite fails its checks."""
     if output_path.suffix != ".jsonl":
         raise click.BadParameter("Output file must end with .jsonl")
+    if distill_mode == "rephrase" and thinking:
+        raise click.BadParameter("rephrase writes the trace as output, so it can't be used with --thinking")
     # The code comes from locally tuned models.
     if not allow_unsandboxed and not (docker_available() and gvisor_available()):
         raise click.ClickException("gVisor (runsc) is not registered with Docker. Pass --allow-unsandboxed to skip it.")
@@ -258,11 +325,14 @@ def main(
 
     executor = ThreadPoolExecutor(max_workers=workers)
     progress = tqdm(total=len(rows), desc="Rows")
+    # Starts from the output file, so a resumed run continues the counts.
+    live_report = LiveReport(count_outcomes(output_path))
     try:
         distill = partial(distill_row, client=client, sandboxes=sandboxes, settings=settings)
         futures = [executor.submit(distill, row) for row in rows]
         # Counts rows as they finish: a slow row would otherwise hide the finished rows queued behind it.
         for future in futures:
+            future.add_done_callback(live_report.record)
             future.add_done_callback(lambda _: progress.update())
         # Not as_completed: rows stay in input order, so the trainer's seeded split picks the same
         # train and eval rows as the undistilled baseline, and a restart can skip by count.
@@ -271,6 +341,7 @@ def main(
     finally:
         # A server failure stops the run here, rather than marking the remaining rows as rejected.
         executor.shutdown(wait=True, cancel_futures=True)
+        live_report.display.close()
         progress.close()
         logger.info("Cleaning up sandbox containers...")
         removed_count = remove_leftover_containers()
