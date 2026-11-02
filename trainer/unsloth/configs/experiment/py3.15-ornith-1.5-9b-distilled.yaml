@@ -13,3 +13,6 @@ datasets:
     - datasets/python3.14/distilled/ornith-1.5-9b/sft.jsonl
     - datasets/python3.14/distilled/ornith-1.5-9b/sft-PEP750.jsonl
     - datasets/python3.15/distilled/ornith-1.5-9b/sft.jsonl
+
+sft:
+  seq_len: 4096 # MAX_LEN in run_distill.sh

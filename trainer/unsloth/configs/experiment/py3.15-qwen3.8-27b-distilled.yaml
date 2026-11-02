@@ -14,3 +14,6 @@ datasets:
     - datasets/python3.14/distilled/qwen3.8-27b/sft-PEP750.jsonl
     - datasets/python3.15/distilled/qwen3.8-27b/sft.jsonl
     - datasets/python3.15/distilled/qwen3.8-27b/sft2.jsonl
+
+sft:
+  seq_len: 4096 # MAX_LEN in run_distill.sh
