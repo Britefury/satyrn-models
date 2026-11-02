@@ -12,7 +12,14 @@ import pytest
 from click.testing import CliRunner
 
 from satyrn.dataset import distill
-from satyrn.dataset.distill import DistillSettings, build_prompt, count_written_rows, distill_row, summarize
+from satyrn.dataset.distill import (
+    DistillMode,
+    DistillSettings,
+    build_prompt,
+    count_written_rows,
+    distill_row,
+    summarize,
+)
 from satyrn.dataset.llm import models
 from satyrn.dataset.llm.models import Completion, VllmClient
 from satyrn.dataset.utils.sandbox import RunResult, Sandbox
@@ -97,6 +104,7 @@ def predecessor(exit_code: int | None = 1) -> FakeSandbox:
 
 def settings(**overrides: Any) -> DistillSettings:
     fields = {
+        "mode": "full",
         "thinking": True,
         "max_tokens": 1280,
         "max_seq_len": 1280,
@@ -117,14 +125,19 @@ def run_row(
 
 
 def test_prompt_matches_the_template() -> None:
-    assert build_prompt(make_row()) == EXPECTED_PROMPT
+    assert build_prompt(make_row(), "full") == EXPECTED_PROMPT
 
 
-def test_prompt_handles_braces_in_the_row() -> None:
+def test_no_reference_prompt_is_the_instruction_alone() -> None:
+    assert build_prompt(make_row(), "no_reference") == "How do I do it?"
+
+
+@pytest.mark.parametrize("mode", ["full", "no_reference"])
+def test_prompt_handles_braces_in_the_row(mode: DistillMode) -> None:
     row = make_row()
     row["prompt"][0]["content"] = "Why {does} this {0} fail?"
 
-    assert "Why {does} this {0} fail?" in build_prompt(row)
+    assert "Why {does} this {0} fail?" in build_prompt(row, mode)
 
 
 def test_accepted_row_replaces_its_fields_together() -> None:
@@ -297,6 +310,23 @@ def test_output_order_matches_the_input(invoke: Any, monkeypatch: pytest.MonkeyP
     _, written = invoke([make_row(index) for index in range(4)], "--workers", "4")
 
     assert [row["filename"] for row in written] == [f"doc-{index}.rst" for index in range(4)]
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [((), EXPECTED_PROMPT), (("--distill-mode", "no_reference"), "How do I do it?")],
+)
+def test_distill_mode_selects_the_prompt_sent(invoke: Any, args: tuple[str, ...], expected: str) -> None:
+    invoke([make_row()], *args)
+
+    assert invoke.client.prompts == [expected]
+
+
+def test_unknown_distill_mode_is_refused(invoke: Any) -> None:
+    result, written = invoke([make_row()], "--distill-mode", "partial")
+
+    assert result.exit_code == 2
+    assert written == []
 
 
 def test_all_rows_have_equal_keys(invoke: Any) -> None:

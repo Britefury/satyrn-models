@@ -148,10 +148,10 @@ satyrn-dataset sft -i datasets/python3.15/ideas.jsonl -o datasets/python3.15/sft
 ### Distill SFT datasets
 
 `distill` implements Self-Distillation Fine-Tuning ([Yang et al.](https://arxiv.org/abs/2402.13669)).
-A seed model rewrites each SFT response, given the instruction and the original response as a
-reference. A rewrite that passes the checks below replaces the original; otherwise the original is
-kept. Training on the result stays closer to the model's own distribution than training on the
-originals.
+A seed model rewrites each SFT response, given the instruction and, in the paper's `full` mode, the
+original response as a reference. A rewrite that passes the checks below replaces the original;
+otherwise the original is kept. Training on the result stays closer to the model's own distribution
+than training on the originals.
 
 The seed is the model after CPT, because that is the model SFT starts from. The full workflow is in
 [Self-distillation](trainer_unsloth.md#self-distillation).
@@ -204,6 +204,20 @@ satyrn-dataset distill -i datasets/python3.15/sft.jsonl \
 
 Pass `--thinking` for models trained with `enable_thinking: true`. Without it, `trace` is left as
 is. Set `--max-seq-len` to the experiment's `sft.seq_len`; it and `--max-tokens` default to 1280.
+
+`--distill-mode` chooses what the model sees:
+
+| Mode | Prompt | Use with |
+| --- | --- | --- |
+| `full` (default) | The paper's prompt: the instruction and the original response | Models without `--thinking` |
+| `no_reference` | The instruction alone | Models with `--thinking`, after CPT |
+
+With `--thinking`, `full` rejects nearly every rewrite as `leak`. The model quotes the prompt back in
+its reasoning, and rewording the prompt or forbidding the mention doesn't stop it. `no_reference` has
+no reference to quote, but departs from the paper's Eq. 3, and an unmodified model is unlikely to
+know the new features, so most of its rewrites will fail `runtime` or `no_new_feature`.
+
+Don't change the mode when resuming, or the output file will mix rewrites from both.
 
 Rows are written in input order, so a restart resumes after the last row in the output file, and
 the trainer's seeded split picks the same train and eval rows as the undistilled dataset. Delete the

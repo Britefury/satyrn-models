@@ -2,6 +2,8 @@
 
 The seed model rewrites each response given the instruction and the original (Eq. 3). A rewrite that
 passes the checks replaces the original; otherwise the original is kept (Eq. 4).
+
+The no_reference mode departs from the paper, by giving the model only the instruction.
 """
 
 import logging
@@ -11,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from typing import Literal, get_args
 
 import click
 from tqdm import tqdm
@@ -27,6 +30,8 @@ from satyrn.dataset.utils.sandbox import (
 
 logger = logging.getLogger(__name__)
 
+DistillMode = Literal["full", "no_reference"]
+
 # The paper's Fig. 3, verbatim.
 PROMPT_TEMPLATE = """Below are an instruction that describes a task along with a reference answer. \
 Using the reference answer as a guide, write your own response.
@@ -42,6 +47,7 @@ PYTHON_BLOCK_PATTERN = re.compile(r"^```python[ \t]*\n(.*?)\n```[ \t]*$", re.DOT
 
 @dataclass(frozen=True)
 class DistillSettings:
+    mode: DistillMode
     thinking: bool
     max_tokens: int
     max_seq_len: int
@@ -58,11 +64,13 @@ class Rewrite:
     output: str
 
 
-def build_prompt(row: dict) -> str:
+def build_prompt(row: dict, mode: DistillMode) -> str:
     """Return the rewrite prompt for row. The original trace is left out, so the model reasons for itself."""
-    return PROMPT_TEMPLATE.format(
-        instruction=row["prompt"][-1]["content"], original_response=row["completion"][0]["content"]
-    )
+    instruction = row["prompt"][-1]["content"]
+    # With thinking on, the model quotes a reference answer back in its reasoning, whatever the prompt calls it.
+    if mode == "no_reference":
+        return instruction
+    return PROMPT_TEMPLATE.format(instruction=instruction, original_response=row["completion"][0]["content"])
 
 
 def check_syntax(code: str, sandbox: Sandbox) -> bool:
@@ -120,7 +128,7 @@ def check_completion(
 def distill_row(row: dict, client: VllmClient, sandboxes: dict[str, tuple], settings: DistillSettings) -> dict:
     """Return row rewritten by the model, or unchanged but for the rejection if no attempt passed."""
     sandbox, predecessor_sandbox = sandboxes[row["python_version"]]
-    prompt = build_prompt(row)
+    prompt = build_prompt(row, settings.mode)
 
     # A retry resamples the same prompt: hints would pull the output away from the model's distribution.
     rejection = None
@@ -186,6 +194,13 @@ def summarize(output_path: Path) -> str:
     help="JSONL file to write. If it exists, the run resumes after its last row.",
 )
 @click.option("--model", "model_name", default="seed", show_default=True, help="Model name served by vLLM.")
+@click.option(
+    "--distill-mode",
+    type=click.Choice(get_args(DistillMode)),
+    default="full",
+    show_default=True,
+    help="full shows the model the original response, as in the paper. no_reference shows only the instruction.",
+)
 @click.option("--thinking", is_flag=True, default=False, help="Enable thinking and replace each row's trace.")
 @click.option("--max-tokens", type=click.IntRange(min=1), default=1280, show_default=True, help="Response limit.")
 @click.option(
@@ -206,6 +221,7 @@ def main(
     input_path: Path,
     output_path: Path,
     model_name: str,
+    distill_mode: DistillMode,
     thinking: bool,
     max_tokens: int,
     max_seq_len: int,
@@ -238,7 +254,7 @@ def main(
         python_version: (Sandbox(python_version), Sandbox(get_predecessor_python_version(python_version)))
         for python_version in {row["python_version"] for row in rows}
     }
-    settings = DistillSettings(thinking, max_tokens, max_seq_len, max_attempts, match_expected_output)
+    settings = DistillSettings(distill_mode, thinking, max_tokens, max_seq_len, max_attempts, match_expected_output)
 
     executor = ThreadPoolExecutor(max_workers=workers)
     progress = tqdm(total=len(rows), desc="Rows")

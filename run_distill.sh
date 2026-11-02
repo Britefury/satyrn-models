@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Distills every SFT dataset with Qwen3.8-27B and Ornith-1.5-9B, both unmodified and after CPT,
-# serving one model at a time. See docs/dataset_generator.md. Linux-only, because vLLM is.
+# Distills every SFT dataset with Qwen3.8-27B and Ornith-1.5-9B after CPT, serving one model at a
+# time. See docs/dataset_generator.md. Linux-only, because vLLM is.
 #
 # Usage: bash run_distill.sh [workers]
 #
@@ -25,8 +25,8 @@ MAX_ATTEMPTS=6
 # Long enough to download the model on first use.
 STARTUP_TIMEOUT_SECONDS=3600
 SHUTDOWN_TIMEOUT_SECONDS=120
-# Holds the reference answer plus the response. The longest row is about 10k characters. A request
-# over this limit fails, which stops distill. Capping it keeps the KV cache small.
+# Holds the instruction plus the response. A request over this limit fails, which stops distill.
+# Capping it keeps the KV cache small.
 MAX_MODEL_LEN=8192
 # vLLM's default of 1024 needs more Mamba cache blocks than Qwen3.8-27B leaves on one GPU (678), so
 # it fails to start. Keep this at or above the worker count, or requests queue.
@@ -36,13 +36,11 @@ MAX_NUM_SEQS=64
 MAX_LEN=4096
 LOG_DIR=outputs/distill-logs
 
-# distilled/ holds rewrites by the model after CPT, which the -distilled experiments read. Rewrites
-# by the unmodified models don't match an SFT run resuming from CPT, so they're kept apart.
+# distilled/ holds rewrites by the model after CPT, which the -distilled experiments read. There are
+# no unmodified models here: no_reference rewrites need the new features that CPT teaches.
 # Local paths are relative to serving/vllm, where vLLM runs.
 MODELS=(
-    "qwen3.8-27b unsloth/Qwen3.8-27B distilled-unmodified"
     "qwen3.8-27b ../../outputs/py3.15-Qwen3.8-27B/cpt/merged distilled"
-    "ornith-1.5-9b ornith-ai/Ornith-1.5-9B distilled-unmodified"
     "ornith-1.5-9b ../../outputs/py3.15-Ornith-1.5-9B/cpt/merged distilled"
 )
 DATASETS=(
@@ -118,7 +116,7 @@ distill_model() {
         uv run --project corpus_builder satyrn-dataset distill \
             -i "datasets/${dataset}.jsonl" \
             -o "datasets/${dataset%%/*}/${output_dir}/${name}/${dataset##*/}.jsonl" \
-            --thinking --max-tokens "$MAX_LEN" --max-seq-len "$MAX_LEN" \
+            --distill-mode no_reference --thinking --max-tokens "$MAX_LEN" --max-seq-len "$MAX_LEN" \
             --workers "$WORKERS" --max-attempts "$MAX_ATTEMPTS" || return 1
     done
 }
