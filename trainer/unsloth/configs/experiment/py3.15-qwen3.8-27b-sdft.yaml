@@ -40,9 +40,13 @@ sdft:
   learning_rate: 2e-4
   max_prompt_length: 1024
   # Thinking is enabled, so completions need room to finish reasoning and reach the answer.
-  max_completion_length: 2048
+  max_completion_length: 2560
+  # The Qwen3.8 template defaults to xhigh reasoning effort, which overran max_completion_length on nearly
+  # every rollout. Applies to both the student and teacher prompts.
+  chat_template_kwargs:
+    reasoning_effort: low
   # Enable with sdft.use_vllm=true. The colocated engine holds its own ~51 GiB copy of the weights, so it needs
   # more than the 0.3 default; capping the length at prompt + completion keeps the KV cache small.
   use_vllm: false
   vllm_gpu_memory_utilization: 0.45
-  vllm_max_model_length: 3072
+  vllm_max_model_length: 3584
