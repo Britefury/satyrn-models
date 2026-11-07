@@ -152,3 +152,20 @@ def test_every_problem_is_reported_at_once() -> None:
     assert "temperature must be positive" in message
     assert "num_generations must be at least 1" in message
     assert "use_teacher_server requires use_vllm=True" in message
+
+
+def test_eval_can_be_disabled() -> None:
+    assert build(eval_steps=None).eval_steps is None
+
+
+def test_eval_steps_must_be_positive_when_set() -> None:
+    assert "eval_steps must be at least 1 when set" in error_text(eval_steps=0)
+
+
+def test_max_eval_samples_caps_the_eval_split() -> None:
+    assert build(max_eval_samples=32).max_eval_samples == 32
+    assert "max_eval_samples must be at least 1 when set" in error_text(max_eval_samples=0)
+
+
+def test_max_eval_samples_requires_eval_steps() -> None:
+    assert "max_eval_samples needs eval_steps" in error_text(eval_steps=None, max_eval_samples=32)

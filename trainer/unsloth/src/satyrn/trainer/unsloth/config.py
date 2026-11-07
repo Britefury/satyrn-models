@@ -143,7 +143,12 @@ class SdftStageConfig(BaseModel):
 
     batch_size: int
     eval_batch_size: int
-    eval_steps: int
+    # Optimizer steps between evals. None disables periodic eval and trains on the whole dataset: with a single
+    # epoch, every training batch is already a fresh prompt with fresh rollouts, so the training distillation loss
+    # is itself a held-out measurement, and each eval regenerates rollouts for the whole eval split.
+    eval_steps: int | None
+    # Number of rows held out for periodic eval, in place of the top-level eval_ratio. Requires eval_steps.
+    max_eval_samples: int | None = None
     gradient_accumulation_steps: int
     num_train_epochs: int
     learning_rate: float
@@ -291,7 +296,6 @@ class SdftStageConfig(BaseModel):
         for name in (
             "batch_size",
             "eval_batch_size",
-            "eval_steps",
             "gradient_accumulation_steps",
             "num_train_epochs",
             "num_generations",
@@ -300,9 +304,20 @@ class SdftStageConfig(BaseModel):
         ):
             value = getattr(self, name)
             require(value >= 1, f"{name} must be at least 1, got {value}.")
-        for name in ("max_prompt_length", "max_completion_length", "generation_batch_size", "steps_per_generation"):
+        for name in (
+            "eval_steps",
+            "max_eval_samples",
+            "max_prompt_length",
+            "max_completion_length",
+            "generation_batch_size",
+            "steps_per_generation",
+        ):
             value = getattr(self, name)
             require(value is None or value >= 1, f"{name} must be at least 1 when set, got {value}.")
+        require(
+            self.max_eval_samples is None or self.eval_steps is not None,
+            "max_eval_samples needs eval_steps; with eval_steps unset nothing is held out for eval.",
+        )
         require(self.num_loss_tokens_to_skip >= 0, "num_loss_tokens_to_skip must not be negative.")
         # The distillation loss is per token with no group advantage, so a single completion per prompt is valid.
         require(

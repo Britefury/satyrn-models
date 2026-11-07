@@ -32,9 +32,11 @@ sdft:
   num_generations_eval: 1
   # Eval forwards student and teacher over the whole eval batch in one pass, so keep it at batch_size.
   eval_batch_size: 2
-  # Every eval generates rollouts for the whole eval split, so keep evals infrequent.
-  # Counted in optimizer steps, each of which now covers 16 completions.
-  eval_steps: 25
+  # Periodic eval is off: in a single epoch every training batch is a fresh prompt, so the training
+  # distillation loss already measures held-out data, while each eval regenerated rollouts for ~500 prompts
+  # two at a time (hours per eval). For a sanity check, set eval_steps (optimizer steps) and cap the
+  # held-out set with max_eval_samples, e.g. eval_steps: 50, max_eval_samples: 32.
+  eval_steps: null
   gradient_accumulation_steps: 8
   num_train_epochs: 1
   learning_rate: 2e-4

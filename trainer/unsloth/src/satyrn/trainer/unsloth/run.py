@@ -364,8 +364,14 @@ def main(cfg: DictConfig) -> None:
                         config.model.enable_thinking,
                         config.sdft.privileged_context_template,
                     )
-                    split = dataset.train_test_split(test_size=config.eval_ratio, seed=42)
-                    train_dataset, eval_dataset = split["train"], split["test"]
+                    if config.sdft.eval_steps is None:
+                        # Periodic eval is off, so nothing is held out.
+                        train_dataset, eval_dataset = dataset, None
+                    else:
+                        # An int test_size holds out exactly that many rows.
+                        test_size = config.sdft.max_eval_samples or config.eval_ratio
+                        split = dataset.train_test_split(test_size=test_size, seed=42)
+                        train_dataset, eval_dataset = split["train"], split["test"]
 
                     sdft_args = SDFTConfig(
                         output_dir="outputs/sdft",
@@ -373,7 +379,7 @@ def main(cfg: DictConfig) -> None:
                         per_device_eval_batch_size=config.sdft.eval_batch_size,
                         gradient_accumulation_steps=config.sdft.gradient_accumulation_steps,
                         logging_steps=cfg.logging_steps,
-                        eval_strategy="steps",
+                        eval_strategy="no" if config.sdft.eval_steps is None else "steps",
                         eval_steps=config.sdft.eval_steps,
                         report_to="mlflow",
                         num_train_epochs=config.sdft.num_train_epochs,
