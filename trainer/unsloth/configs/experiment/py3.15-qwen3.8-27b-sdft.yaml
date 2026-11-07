@@ -46,4 +46,3 @@ sdft:
   use_vllm: false
   vllm_gpu_memory_utilization: 0.45
   vllm_max_model_length: 3072
-  vllm_enforce_eager: true

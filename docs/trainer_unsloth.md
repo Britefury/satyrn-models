@@ -13,11 +13,22 @@ Install the `satyrn-unsloth` command into your environment from the `trainer/uns
 uv pip install -e ./trainer/unsloth
 ```
 
-Unsloth installs `trl==0.24.0` which has a known bug [trl#6105](https://github.com/huggingface/trl/issues/6105).
-We need to upgrade `trl`:
+Unsloth installs `trl==0.24.0` which has a known bug [trl#6105](https://github.com/huggingface/trl/issues/6105),
+and caps `trl<=1.15.0`, but `vllm==0.32.0` (used for SDFT generation) needs `trl>=1.17.0`. Run the install
+from the repo root so the `trl==1.17.1` override in `uv.toml` applies, or upgrade `trl` afterwards:
 
 ```sh
-uv pip install "trl==1.7.0"
+uv pip install "trl==1.17.1"
+```
+
+`vllm==0.32.0` requires `torch==2.13.0` and `torchvision==0.28.0`.
+
+If upgrading an environment that had `vllm==0.23.0`, uninstall the leftover `flashinfer-cubin`. vLLM 0.32 doesn't
+use it, and its stale version makes flashinfer raise `flashinfer-cubin version (0.6.12) does not match flashinfer
+version (0.7.0.post1)`:
+
+```sh
+uv pip uninstall flashinfer-cubin
 ```
 
 ### Transformers version

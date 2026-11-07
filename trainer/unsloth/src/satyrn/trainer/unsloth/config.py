@@ -259,9 +259,9 @@ class SdftStageConfig(BaseModel):
     vllm_gpu_memory_utilization: float = 0.3
     # Context window for vLLM. If omitted, it is inferred from the model config.
     vllm_max_model_length: int | None = None
-    # Run the colocated vLLM engine without torch.compile and CUDA graphs. vLLM 0.23 fails to compile Qwen3.5's
-    # linear attention ("Tried to erase Node size but it still had 2 users"). For vllm_mode='server', pass
-    # --enforce-eager to the vLLM server instead.
+    # Run the colocated vLLM engine without torch.compile and CUDA graphs. Slower; only needed as a workaround for
+    # models vLLM fails to compile (vLLM 0.23 failed on Qwen3.5's linear attention; 0.32 does not). For
+    # vllm_mode='server', pass --enforce-eager to the vLLM server instead.
     vllm_enforce_eager: bool = False
 
     # Training parameters
