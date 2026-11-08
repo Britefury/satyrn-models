@@ -35,7 +35,13 @@ def run_inspect_eval(
     max_new_tokens: int = 4096,
     batch_size: int = 8,
     limit: int | None = None,
+    step: int | None = None,
 ) -> list[EvalLog]:
+    """Run task against the model and log its metrics to the active MLflow run.
+
+    Metrics are logged at `step`, defaulting to the stage's position in StageName so that post-stage evals
+    line up across stages in the parent run.
+    """
 
     # Lazy import to allow Unsloth patching of Torch and Transformers
     from satyrn.trainer.unsloth.eval.inspect_api import InMemoryHuggingFaceAPI
@@ -60,6 +66,6 @@ def run_inspect_eval(
             for metric_name, metric in score.metrics.items()
             if metric.params.get("group_key") != "pep"
         },
-        step=get_args(StageName).index(stage),
+        step=get_args(StageName).index(stage) if step is None else step,
     )
     return log

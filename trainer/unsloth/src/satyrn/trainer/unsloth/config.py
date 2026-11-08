@@ -153,6 +153,14 @@ class SdftStageConfig(BaseModel):
     num_train_epochs: int
     learning_rate: float
 
+    # Per-epoch hooks
+    # Run the full model evaluation (QA, HumanEval, python-eval) at the end of every epoch except the last, which
+    # the evaluation after the stage already covers. Metrics go to the nested sdft MLflow run at the global step.
+    eval_each_epoch: bool = False
+    # Save the model to <hydra output dir>/checkpoints/sdft-epoch<N> at the end of every epoch. A LoRA model
+    # saves only its adapter.
+    save_each_epoch: bool = False
+
     # SDFT loss parameters
     # Divergence interpolation coefficient for SDFT top-k logit distillation.
     distillation_alpha: float = 0.5

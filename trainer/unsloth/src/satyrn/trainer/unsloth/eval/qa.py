@@ -28,9 +28,13 @@ QUESTIONS = [
 ]
 
 
-def run_eval_qa(stage: StageName, model: Module, tokenizer: PreTrainedTokenizerBase) -> None:
-    """Ask every question in QUESTIONS and log the answers."""
-    session_id = f"{stage}-{mlflow.active_run().info.run_id[:8]}"
+def run_eval_qa(stage: StageName, model: Module, tokenizer: PreTrainedTokenizerBase, tag: str | None = None) -> None:
+    """Ask every question in QUESTIONS and log the answers.
+
+    `tag` (e.g. "epoch1") distinguishes the trace sessions of several evals within one stage.
+    """
+    prefix = stage if tag is None else f"{stage}-{tag}"
+    session_id = f"{prefix}-{mlflow.active_run().info.run_id[:8]}"
 
     @mlflow.trace
     def answer_question(prompt: str) -> str:

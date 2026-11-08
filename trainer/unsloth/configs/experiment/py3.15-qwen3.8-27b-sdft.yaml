@@ -4,14 +4,17 @@ defaults:
   - /model: qwen3.8-27b
   - _self_
 
-run_name: py3.15-Qwen3.8-27B-SDFT-TEST
+run_name: py3.15-Qwen3.8-27B-SDFT
 
 mlflow:
-  experiment_name: Qwen3.8-27B-TEST
+  experiment_name: Qwen3.8-27B
 
 load_in_4bit: false
 
 datasets:
+  cpt:
+    - datasets/python3.14/cpt.jsonl
+    - datasets/python3.15/cpt.jsonl
   sdft:
     - datasets/python3.14/sft.jsonl
     - datasets/python3.14/sft-PEP750.jsonl

@@ -20,6 +20,7 @@ from omegaconf import DictConfig
 
 from satyrn.trainer.unsloth.config import ExperimentConfig, StageName, basename, log_config, validate_config
 from satyrn.trainer.unsloth.dataset_packing import pack_documents
+from satyrn.trainer.unsloth.epoch_callback import make_epoch_end_callback
 from satyrn.trainer.unsloth.eval.inspect_runner import run_inspect_eval
 from satyrn.trainer.unsloth.eval.python_eval import python_eval
 from satyrn.trainer.unsloth.eval.qa import run_eval_qa
@@ -212,11 +213,21 @@ def log_dataset_params(dataset_path: str | list[str], trainer: Trainer) -> None:
     mlflow.log_params({"dataset_path": dataset_path, "dataset_train_rows": len(trainer.train_dataset)})
 
 
-def evaluate_model(stage_name: StageName, model: Module, tokenizer: PreTrainedTokenizerBase) -> None:
-    """Run every eval against the model as it stands after stage_name."""
-    run_eval_qa(stage_name, model, tokenizer)
-    run_inspect_eval(stage_name, model, tokenizer, humaneval(sandbox="local"))
-    run_inspect_eval(stage_name, model, tokenizer, python_eval())
+def evaluate_model(
+    stage_name: StageName,
+    model: Module,
+    tokenizer: PreTrainedTokenizerBase,
+    step: int | None = None,
+    tag: str | None = None,
+) -> None:
+    """Run every eval against the model as it stands after stage_name.
+
+    Mid-stage evals pass `step` (the MLflow step for the metrics) and `tag` (e.g. "epoch1", to keep QA trace
+    sessions apart); post-stage evals leave both unset.
+    """
+    run_eval_qa(stage_name, model, tokenizer, tag=tag)
+    run_inspect_eval(stage_name, model, tokenizer, humaneval(sandbox="local"), step=step)
+    run_inspect_eval(stage_name, model, tokenizer, python_eval(), step=step)
 
 
 def upload_to_hub(model: Module, processor: ProcessorMixin, config: ExperimentConfig) -> None:
@@ -457,6 +468,20 @@ def main(cfg: DictConfig) -> None:
                         eval_dataset=eval_dataset,
                         args=sdft_args,
                     )
+                    if config.sdft.eval_each_epoch or config.sdft.save_each_epoch:
+                        sdft_train.add_callback(
+                            make_epoch_end_callback(
+                                "sdft",
+                                model,
+                                tokenizer,
+                                evaluate=(
+                                    functools.partial(evaluate_model, "sdft", model, tokenizer)
+                                    if config.sdft.eval_each_epoch
+                                    else None
+                                ),
+                                save_dir=output_dir / "checkpoints" if config.sdft.save_each_epoch else None,
+                            )
+                        )
 
                     with mlflow.start_run(run_name="sdft", nested=True):
                         log_dataset_params(config.datasets.sdft, sdft_train)

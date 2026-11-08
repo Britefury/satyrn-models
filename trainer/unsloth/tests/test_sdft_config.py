@@ -169,3 +169,11 @@ def test_max_eval_samples_caps_the_eval_split() -> None:
 
 def test_max_eval_samples_requires_eval_steps() -> None:
     assert "max_eval_samples needs eval_steps" in error_text(eval_steps=None, max_eval_samples=32)
+
+
+def test_per_epoch_hooks_default_off() -> None:
+    config = build()
+
+    assert config.eval_each_epoch is False
+    assert config.save_each_epoch is False
+    assert build(eval_each_epoch=True, save_each_epoch=True).save_each_epoch is True
