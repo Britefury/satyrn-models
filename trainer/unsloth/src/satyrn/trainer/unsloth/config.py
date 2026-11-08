@@ -154,11 +154,12 @@ class SdftStageConfig(BaseModel):
     learning_rate: float
 
     # Per-epoch hooks
-    # Run the full model evaluation (QA, HumanEval, python-eval) at the end of every epoch except the last, which
-    # the evaluation after the stage already covers. Metrics go to the nested sdft MLflow run at the global step.
+    # Both hooks act at the end of every epoch except the last, which the normal mechanisms cover: the evaluation
+    # after the stage, and the checkpoint the Trainer writes at the final step (outputs/sdft/checkpoint-<step>).
+    # Run the full model evaluation (QA, HumanEval, python-eval). Metrics go to the nested sdft MLflow run at the
+    # global step.
     eval_each_epoch: bool = False
-    # Save the model to <hydra output dir>/checkpoints/sdft-epoch<N> at the end of every epoch. A LoRA model
-    # saves only its adapter.
+    # Save the model to <hydra output dir>/checkpoints/sdft-epoch<N>. A LoRA model saves only its adapter.
     save_each_epoch: bool = False
 
     # SDFT loss parameters

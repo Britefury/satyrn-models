@@ -1,0 +1,66 @@
+# @package _global_
+defaults:
+  - /defaults
+  - /model: qwen3.8-27b
+  - _self_
+
+# v2: SDFT on top of the CPT model rather than running CPT again first.
+# The CPT run's merged weights (base model with the CPT LoRA folded in) are loaded as the base model, and SDFT
+# trains a fresh LoRA on them. The path is relative to the repo root, like the dataset paths, so run from there.
+model:
+  name: outputs/py3.15-Qwen3.8-27B/cpt/merged
+
+run_name: py3.15-Qwen3.8-27B-SDFT-from-cpt
+
+mlflow:
+  experiment_name: Qwen3.8-27B
+
+load_in_4bit: false
+
+datasets:
+  # No cpt datasets: the loaded model has already been through CPT.
+  sdft:
+    - datasets/python3.14/sft.jsonl
+    - datasets/python3.14/sft-PEP750.jsonl
+    - datasets/python3.15/sft.jsonl
+    - datasets/python3.15/sft2.jsonl
+
+sdft:
+  batch_size: 2
+  # Rollouts are generated in whole prompt groups (num_generations) spanning whole training batches:
+  # 16 = 8 * batch_size = 16 * num_generations, so steps_per_generation resolves to 8.
+  # gradient_accumulation_steps matches steps_per_generation, so each generation feeds exactly one
+  # optimizer step. That keeps training on-policy and makes the trainer skip its rollout log-prob pass,
+  # which would otherwise forward all 16 sequences at once with full-vocab logits and exhaust memory.
+  generation_batch_size: 16
+  # The SDFT loss is per-token distillation with no group advantage, so extra completions per prompt
+  # only multiply generation cost.
+  num_generations: 1
+  num_generations_eval: 1
+  # Eval forwards student and teacher over the whole eval batch in one pass, so keep it at batch_size.
+  eval_batch_size: 2
+  # Periodic eval is off: each eval regenerated rollouts for ~500 prompts two at a time (hours per eval).
+  # In the first epoch every training batch is a fresh prompt, so the training distillation loss measures
+  # held-out data; from epoch 2 the prompts repeat, so rely on the per-epoch evals below instead. For a sanity check, set eval_steps (optimizer steps) and cap the
+  # held-out set with max_eval_samples, e.g. eval_steps: 50, max_eval_samples: 32.
+  eval_steps: null
+  gradient_accumulation_steps: 8
+  num_train_epochs: 2
+  # After every epoch but the last, run the full eval suite and save the LoRA adapter to
+  # <hydra output dir>/checkpoints/sdft-epoch<N>. The last epoch gets the post-stage eval and the Trainer's
+  # final checkpoint in outputs/sdft/checkpoint-<step>.
+  eval_each_epoch: true
+  save_each_epoch: true
+  learning_rate: 2e-4
+  max_prompt_length: 1024
+  # Thinking is enabled, so completions need room to finish reasoning and reach the answer.
+  max_completion_length: 2560
+  # The Qwen3.8 template defaults to xhigh reasoning effort, which overran max_completion_length on nearly
+  # every rollout. Applies to both the student and teacher prompts.
+  chat_template_kwargs:
+    reasoning_effort: low
+  # Enable with sdft.use_vllm=true. The colocated engine holds its own ~51 GiB copy of the weights, so it needs
+  # more than the 0.3 default; capping the length at prompt + completion keeps the KV cache small.
+  use_vllm: false
+  vllm_gpu_memory_utilization: 0.45
+  vllm_max_model_length: 3584
